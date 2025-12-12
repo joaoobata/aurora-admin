@@ -3,6 +3,8 @@ import { OverviewChart } from "@/components/dashboard/overview-chart"
 import { Users, Eye, ArrowUpRight, Activity } from "lucide-react"
 import { DataService } from "@/services/data-service"
 
+export const dynamic = 'force-dynamic'
+
 export default async function DashboardPage() {
   const stats = await DataService.getDashboardStats();
   const accounts = await DataService.getAccounts();
