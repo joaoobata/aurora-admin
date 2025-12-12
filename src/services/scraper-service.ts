@@ -263,7 +263,9 @@ export const ScraperService = {
         videos,
         profileStats: {
             followers: 12500,
-            following: 150
+            following: 150,
+            totalViews: 0,
+            totalLikes: 0
         }
     }
   }
