@@ -202,13 +202,56 @@ export const DataService = {
          if (chartData[key]) chartData[key].uploads++;
      });
 
-     // Fill Views (Simplified: Just fetch latest view count and distribute or flat line for now)
-     // Real implementation would query video_metrics grouped by day.
-     // For this MVP update, let's return the structure ready for the UI.
+     // Fill Views (Aggregating real data)
+     // Since we don't have aggregated daily stats table, we'll try to find the MAX view count for each video ON that day
+     // and sum them up. This is an approximation.
+     // Better approximation: Sum the 'views' from the LATEST metric recorded for each video on or before that day.
+     
+     // Simplified Real Logic for MVP Chart:
+     // We just sum the 'views' of all metrics recorded ON that specific day.
+     // This assumes one metric per day per video. If multiple, it sums them (wrong).
+     // Correct logic: For each day in the chart range, sum the max views of videos active that day.
+     // This is O(N*M) heavy.
+     
+     // Optimized Real Logic:
+     // Fetch all metrics in the range.
+     // Group by date -> video_id -> max(views).
+     // Sum(max_views) per day.
+     
+     const { data: metricsInRange } = await supabase
+        .from('video_metrics')
+        .select('video_id, views, recorded_at')
+        .gte('recorded_at', startDate.toISOString())
+        .lte('recorded_at', endDate.toISOString());
+        
+     if (metricsInRange) {
+         metricsInRange.forEach((m: any) => {
+             const key = m.recorded_at.split('T')[0];
+             if (!chartData[key]) return; // Should allow if range matches
+             
+             // We need to be careful. If we just sum all metrics, we count the same video multiple times if it was scraped twice a day.
+             // We need a map per day to store only the latest/max metric per video.
+             if (!(chartData[key] as any)._videoMap) (chartData[key] as any)._videoMap = new Map();
+             
+             const currentMax = (chartData[key] as any)._videoMap.get(m.video_id) || 0;
+             if (m.views > currentMax) {
+                 (chartData[key] as any)._videoMap.set(m.video_id, m.views);
+             }
+         });
+         
+         // Final summation for chart
+         Object.keys(chartData).forEach(key => {
+             if ((chartData[key] as any)._videoMap) {
+                 let dayTotal = 0;
+                 (chartData[key] as any)._videoMap.forEach((v: number) => dayTotal += v);
+                 chartData[key].views = dayTotal;
+             }
+         });
+     }
      
      return Object.entries(chartData).map(([date, data]) => ({
          name: new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-         views: Math.floor(Math.random() * 5000), // Placeholder until complex aggregation is ready
+         views: data.views,
          uploads: data.uploads
      }));
   },
