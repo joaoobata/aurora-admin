@@ -176,20 +176,36 @@ export const RapidApiService = {
     }).filter(Boolean);
 
     // 4. Get Channel Stats (Subscribers)
-    // We might have got it from search result (channelItem.subscriberCountText)
-    // Or call /channel/details
-    
-    // Let's rely on what we have or do a quick details call if needed
-    // For now, let's return 0 if not found, or use search data
+    // We try to fetch details if we have the channel ID
+    // Endpoint: /channel/details/?id=...
     let subscribers = 0;
-    // ... logic to parse subscriberCountText from search step ...
+    let totalViews = 0;
+    
+    try {
+        const detailsUrl = `https://${YT_HOST}/channel/details/`;
+        const detailsRes = await fetch(`${detailsUrl}?id=${channelId}`, { headers: headers(YT_HOST) });
+        const detailsData = await detailsRes.json();
+        
+        console.log(`📺 YT Channel Details:`, JSON.stringify(detailsData, null, 2));
+        
+        // Map based on response (usually 'subscriberCountText')
+        const header = detailsData.header?.c4TabbedHeaderRenderer;
+        if (header) {
+            subscribers = parseCount(header.subscriberCountText?.simpleText);
+        }
+        
+        // Total views often in 'about' tab or metadata, might not be in header.
+        // For MVP, if we can't find it easily, we default to 0.
+    } catch (e) {
+        console.warn("⚠️ Failed to fetch YT channel details", e);
+    }
     
     return {
         videos,
         profileStats: {
-            followers: subscribers, // Need to parse "1.2M subscribers"
+            followers: subscribers, 
             following: 0,
-            totalViews: 0,
+            totalViews: totalViews,
             totalLikes: 0
         }
     };
