@@ -67,24 +67,26 @@ export const ScraperService = {
     }
 
     try {
-      // Using 'apify/instagram-scraper'
+      // Clean username (remove @ if present)
+      const cleanUsername = username.replace('@', '');
+      
+      // Using 'apify/instagram-scraper' with direct URLs is more reliable
       const run = await client.actor("apify/instagram-scraper").call({
-        usernames: [username],
+        directUrls: [`https://www.instagram.com/${cleanUsername}/`],
         resultsType: "posts",
-        limit: 15,
+        resultsLimit: 15, // Changed from limit to resultsLimit as per common actor spec
       });
 
       console.log(`🤖 Instagram Scraper Run Started: ${run.id}`);
       const { items } = await client.dataset(run.defaultDatasetId).listItems();
       
-      // Separate profile info (usually the first item or embedded) from posts
-      // Note: apify/instagram-scraper returns posts. To get profile stats we might need 'details' resultsType or parse from posts owner info if available.
-      // For simplicity in this implementation, we assume items are posts.
+      console.log(`📊 Scraper returned ${items.length} items for ${cleanUsername}`);
       
-      // Let's try to find profile info if it exists in the dataset or a separate call
-      // If we only get posts, we can't get total followers easily without a specific profile call.
-      // But let's assume we map posts for now.
-      
+      if (items.length === 0) {
+          console.warn("⚠️ Scraper returned 0 items. Checking input/permissions.");
+          return { videos: [], profileStats: null };
+      }
+
       return {
         videos: items.map((item: any) => ({
           externalId: item.id,
@@ -93,16 +95,14 @@ export const ScraperService = {
           thumbnailUrl: item.displayUrl,
           publishedAt: item.timestamp,
           stats: {
-            views: item.videoViewCount || 0, // Instagram posts might not have views if image
+            views: item.videoViewCount || 0,
             likes: item.likesCount,
             comments: item.commentsCount,
-            shares: 0, // Insta API rarely gives shares public
+            shares: 0,
           }
         })),
-        // We'll return profile stats if we can find them, otherwise null
-        // Often scraper returns a special item for profile
         profileStats: items[0]?.owner ? {
-             followers: (items[0].owner as any).followersCount, // Sometimes available on post object
+             followers: (items[0].owner as any).followersCount,
              following: (items[0].owner as any).followsCount
         } : null
       };
