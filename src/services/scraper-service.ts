@@ -51,6 +51,8 @@ export const ScraperService = {
         profileStats: items[0]?.authorMeta ? {
             followers: (items[0].authorMeta as any).fans,
             following: (items[0].authorMeta as any).following,
+            totalLikes: (items[0].authorMeta as any).heart || 0,
+            totalViews: 0 // TikTok doesn't easily show total views on profile
         } : null
       };
 
@@ -130,14 +132,18 @@ export const ScraperService = {
           console.log("🔍 Found Profile Details:", JSON.stringify(profile, null, 2)); // Debug log
           profileStats = {
               followers: profile.followersCount || 0,
-              following: profile.followsCount || 0
+              following: profile.followsCount || 0,
+              totalViews: 0,
+              totalLikes: 0 // Instagram doesn't show total likes
           };
       } else if (postsItems.length > 0 && (postsItems[0] as any).owner) {
           // Fallback to owner object in posts if details failed
           const owner = (postsItems[0] as any).owner;
           profileStats = {
               followers: owner.followersCount || 0,
-              following: owner.followsCount || 0
+              following: owner.followsCount || 0,
+              totalViews: 0,
+              totalLikes: 0
           };
       }
 
@@ -194,8 +200,9 @@ export const ScraperService = {
           publishedAt: item.date, 
           stats: {
             // YouTube scraper output mapping fix
-            // Often returns 'viewCount' or 'views' or inside 'statistics' object
-            views: item.viewCount || item.views || 0,
+            // Handles various formats: viewCount (int), text ("1.2M views"), or nested stats
+            views: typeof item.viewCount === 'number' ? item.viewCount : 
+                   parseInt(item.viewCount?.toString().replace(/[^0-9]/g, '') || '0') || 0,
             likes: item.likes || item.likeCount || 0,
             comments: item.commentsCount || item.numberOfComments || 0,
             shares: 0,
@@ -206,11 +213,27 @@ export const ScraperService = {
       // The streamer/youtube-scraper often returns channel info in each video item
       const channelInfo = items[0]?.channel || {};
       
+      // Parse subscribers (might be string "1.2M")
+      let subscribers = 0;
+      if (channelInfo.subscribers) {
+          if (typeof channelInfo.subscribers === 'number') {
+              subscribers = channelInfo.subscribers;
+          } else {
+              // Simple parser for K/M/B suffixes if returned as string
+              const text = channelInfo.subscribers.toString().toUpperCase();
+              const multiplier = text.includes('M') ? 1000000 : text.includes('K') ? 1000 : 1;
+              subscribers = parseFloat(text.replace(/[^0-9.]/g, '')) * multiplier;
+          }
+      }
+
       return {
         videos,
         profileStats: {
-            followers: (channelInfo as any).subscribers || 0,
-            following: 0 // YouTube doesn't expose 'following' count easily
+            followers: subscribers || 0,
+            following: 0,
+            // Capture total channel views if available (often in channel.viewCount)
+            totalViews: channelInfo.viewCount || 0, 
+            totalLikes: 0 // YouTube API doesn't easily expose total channel likes
         }
       };
 

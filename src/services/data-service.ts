@@ -87,13 +87,12 @@ export const DataService = {
        const accountIds = accounts.map(a => a.id);
 
        for (const acc of accounts) {
-         // 1. Get Followers from 'metrics' (latest snapshot within range or absolute latest)
-         // For 'Total Followers', usually we want the CURRENT status, regardless of time range selected.
-         // Time range usually applies to "Views gained in period".
-         // But let's stick to "Current Total" for the main big number.
+         // 1. Get Followers & Total Views/Likes from 'metrics' (latest snapshot)
+         // We now prefer the profile-level total views if available (e.g. YouTube channel views),
+         // as it's "pulled from everything" rather than just the sum of scraped videos.
          const { data: latestProfileMetric } = await supabase
             .from('metrics')
-            .select('followers')
+            .select('followers, views, likes')
             .eq('account_id', acc.id)
             .order('recorded_at', { ascending: false })
             .limit(1)
@@ -101,33 +100,35 @@ export const DataService = {
             
          if (latestProfileMetric) {
              totalFollowers += latestProfileMetric.followers || 0;
-         }
-
-         // 2. Sum Views and Likes from 'video_metrics'
-         // If filter range is active, we should ideally sum only views GAINED in that period.
-         // However, standard video_metrics.views is "Total Views". 
-         // Calculating delta for every video is heavy.
-         // For this version, we will show TOTALS (Current State) as requested, 
-         // but we can apply the date filter to the "Growth" calc or charts.
-         
-         const { data: videos } = await supabase
-            .from('videos')
-            .select('id')
-            .eq('account_id', acc.id);
-            
-         if (videos && videos.length > 0) {
-             for (const video of videos) {
-                 const { data: latestVideoMetric } = await supabase
-                    .from('video_metrics')
-                    .select('views, likes')
-                    .eq('video_id', video.id)
-                    .order('recorded_at', { ascending: false })
-                    .limit(1)
-                    .single();
-                 
-                 if (latestVideoMetric) {
-                     totalViews += latestVideoMetric.views || 0;
-                     totalLikes += latestVideoMetric.likes || 0;
+             
+             // If we have a meaningful total view count from profile (e.g. > 100), use it.
+             // Otherwise fallback to summing video metrics (for platforms that return 0 on profile)
+             if (latestProfileMetric.views && latestProfileMetric.views > 0) {
+                 totalViews += latestProfileMetric.views;
+                 // Assuming likes also come from profile if views did
+                 if (latestProfileMetric.likes) totalLikes += latestProfileMetric.likes;
+             } else {
+                 // Fallback: Sum from video_metrics
+                 const { data: videos } = await supabase
+                    .from('videos')
+                    .select('id')
+                    .eq('account_id', acc.id);
+                    
+                 if (videos && videos.length > 0) {
+                     for (const video of videos) {
+                         const { data: latestVideoMetric } = await supabase
+                            .from('video_metrics')
+                            .select('views, likes')
+                            .eq('video_id', video.id)
+                            .order('recorded_at', { ascending: false })
+                            .limit(1)
+                            .single();
+                         
+                         if (latestVideoMetric) {
+                             totalViews += latestVideoMetric.views || 0;
+                             totalLikes += latestVideoMetric.likes || 0;
+                         }
+                     }
                  }
              }
          }

@@ -79,8 +79,8 @@ async function refreshSingleAccount(supabase: any, accountId: string, platform: 
          await supabase.from('metrics').insert({
              account_id: accountId,
              followers: profileStats.followers || 0,
-             views: 0, 
-             likes: 0, 
+             views: profileStats.totalViews || 0, 
+             likes: profileStats.totalLikes || 0, 
              recorded_at: new Date().toISOString()
          });
     }
