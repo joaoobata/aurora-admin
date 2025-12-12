@@ -211,7 +211,7 @@ export const ScraperService = {
 
       // Extract Profile Stats (usually in the first item or channel info)
       // The streamer/youtube-scraper often returns channel info in each video item
-      const channelInfo = items[0]?.channel || {};
+      const channelInfo = (items[0]?.channel || {}) as any;
       
       // Parse subscribers (might be string "1.2M")
       let subscribers = 0;
