@@ -186,9 +186,16 @@ export const RapidApiService = {
         const videoId = v.videoId || v.id;
         if (!videoId) return null;
 
-        const viewCount = typeof v.stats?.views === 'number' 
-            ? v.stats.views 
-            : parseCount(v.stats?.views || v.stats?.viewCount || v.viewCountText?.simpleText);
+        // youtube138 returns views in several shapes: stats.views (number/string), stats.viewCount, viewCountText/simpleText, shortViewCountText, etc.
+        const viewCount =
+            (typeof v.stats?.views === 'number' && v.stats.views) ||
+            parseCount(v.stats?.views) ||
+            parseCount(v.stats?.viewCount) ||
+            parseCount(v.stats?.viewCount?.text) ||
+            parseCount(v.stats?.viewCountText?.simpleText) ||
+            parseCount(v.stats?.shortViewCountText?.simpleText) ||
+            parseCount(v.viewCountText?.simpleText) ||
+            parseCount(v.shortViewCountText?.simpleText);
         return {
             externalId: videoId,
             description: typeof v.title === 'string' ? v.title : v.title?.runs?.[0]?.text || "",
