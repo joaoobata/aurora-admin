@@ -98,15 +98,19 @@ export const ScraperService = {
           thumbnailUrl: item.displayUrl,
           publishedAt: item.timestamp,
           stats: {
-            views: item.videoViewCount || 0,
+            // Instagram API variants: videoViewCount, videoPlayCount, or viewCount
+            views: item.videoPlayCount || item.videoViewCount || item.viewCount || 0,
             likes: item.likesCount,
             comments: item.commentsCount,
             shares: 0,
           }
         })),
         profileStats: items[0]?.owner ? {
-             followers: (items[0].owner as any).followersCount,
-             following: (items[0].owner as any).followsCount
+             // Try to find followers count in owner object, fallback to 0 if not found
+             // Note: 'apify/instagram-scraper' in 'posts' mode might not return full owner details.
+             // We need to check if owner object has followersCount.
+             followers: (items[0].owner as any).followersCount || 0,
+             following: (items[0].owner as any).followsCount || 0
         } : null
       };
 
