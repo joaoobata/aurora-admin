@@ -218,8 +218,11 @@ export const RapidApiService = {
             try {
                 const detailRes = await fetch(`https://${YT_HOST}/video/details/?id=${encodeURIComponent(vid.externalId)}`, { headers: headers(YT_HOST) });
                 const detailJson = await detailRes.json();
-                const detailViews = detailJson.stats?.views || parseCount(detailJson.stats?.shortViewCountText?.simpleText);
-                const detailLikes = detailJson.stats?.likes;
+                const detailViews = 
+                    parseCount(detailJson.stats?.views) ||
+                    parseCount(detailJson.stats?.viewCount) ||
+                    parseCount(detailJson.stats?.shortViewCountText?.simpleText);
+                const detailLikes = parseCount(detailJson.stats?.likes);
                 if (detailViews) vid.stats.views = detailViews;
                 if (detailLikes) vid.stats.likes = detailLikes;
                 if (!vid.thumbnailUrl && detailJson.thumbnails?.length) {
