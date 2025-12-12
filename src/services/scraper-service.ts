@@ -152,6 +152,69 @@ export const ScraperService = {
     }
   },
 
+  scrapeYoutube: async (username: string) => {
+    if (!client) {
+      console.warn("⚠️ APIFY_API_TOKEN not found. Returning mock data.");
+      return ScraperService.getMockData(username);
+    }
+
+    try {
+      // Using 'streamers/youtube-scraper'
+      // It supports searching by username/channel URL
+      const channelUrl = username.startsWith('http') ? username : `https://www.youtube.com/@${username.replace('@', '')}`;
+      
+      console.log(`🚀 Starting YouTube Scrape for ${channelUrl}...`);
+
+      const run = await client.actor("streamers/youtube-scraper").call({
+        searchKeywords: [channelUrl], // Or startUrls if supported better
+        maxResults: 20,
+        postsType: "shorts", // Focus on Shorts as requested
+        downloadSubtitles: false,
+      });
+
+      console.log(`🤖 YouTube Scraper Run Started: ${run.id}`);
+      const { items } = await client.dataset(run.defaultDatasetId).listItems();
+      
+      console.log(`📊 Scraper returned ${items.length} items for ${username}`);
+
+      if (items.length === 0) {
+          console.warn("⚠️ Scraper returned 0 items. Falling back to Mock Data.");
+          return ScraperService.getMockData(username);
+      }
+
+      // Map YouTube Data
+      const videos = items.map((item: any) => ({
+          externalId: item.id,
+          description: item.title,
+          url: item.url,
+          thumbnailUrl: item.thumbnailUrl,
+          publishedAt: item.date, // Format might need adjustment depending on actor output
+          stats: {
+            views: item.viewCount,
+            likes: item.likes || 0, // YouTube scraper sometimes hides likes
+            comments: item.commentsCount || 0,
+            shares: 0,
+          }
+      }));
+
+      // Extract Profile Stats (usually in the first item or channel info)
+      // The streamer/youtube-scraper often returns channel info in each video item
+      const channelInfo = items[0]?.channel || {};
+      
+      return {
+        videos,
+        profileStats: {
+            followers: channelInfo.subscribers || 0,
+            following: 0 // YouTube doesn't expose 'following' count easily
+        }
+      };
+
+    } catch (error) {
+      console.error("❌ YouTube Scraper Error:", error);
+      throw new Error("Failed to scrape data from Apify.");
+    }
+  },
+
   getMockData: (username: string) => {
     // Return realistic mock data so the user can see the UI working immediately
     const videos = Array.from({ length: 5 }).map((_, i) => ({

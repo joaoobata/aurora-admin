@@ -63,6 +63,8 @@ async function refreshSingleAccount(supabase: any, accountId: string, platform: 
         scrapResult = await ScraperService.scrapeTikTok(username);
     } else if (platform === 'instagram') {
         scrapResult = await ScraperService.scrapeInstagram(username);
+    } else if (platform === 'youtube') {
+        scrapResult = await ScraperService.scrapeYoutube(username);
     } else {
         // Fallback for other platforms or mock
         scrapResult = ScraperService.getMockData(username);
