@@ -104,5 +104,68 @@ export const DataService = {
      // For a real app, you'd use a postgres function to aggregate by month.
      // Returning empty for now to start fresh.
      return []; 
+  },
+
+  getAccountDetails: async (accountId: string) => {
+    if (!supabase) throw new Error("Supabase client not initialized");
+    
+    const { data: account, error: accountError } = await supabase
+      .from('accounts')
+      .select('*')
+      .eq('id', accountId)
+      .single();
+      
+    if (accountError) throw accountError;
+    
+    return {
+      id: account.id,
+      userId: account.user_id,
+      platform: account.platform,
+      username: account.username,
+      url: account.url,
+      status: account.status,
+      createdAt: account.created_at,
+    };
+  },
+
+  getAccountVideos: async (accountId: string) => {
+    if (!supabase) throw new Error("Supabase client not initialized");
+
+    const { data, error } = await supabase
+      .from('videos')
+      .select(`
+        *,
+        video_metrics (
+          views,
+          likes,
+          comments,
+          shares
+        )
+      `)
+      .eq('account_id', accountId)
+      .order('published_at', { ascending: false });
+
+    if (error) throw error;
+
+    // Transform and pick latest metrics
+    return data.map((video: any) => {
+        // Sort metrics by latest (although we usually insert latest at end, DB order isn't guaranteed without order by)
+        // For simplicity, taking the last one or sorting if needed.
+        // Assuming video_metrics array might be populated if we did a join.
+        // In Supabase join syntax above, it returns an array of metrics.
+        const latestMetric = video.video_metrics?.[0] || { views: 0, likes: 0, comments: 0, shares: 0 };
+        
+        return {
+            id: video.id,
+            accountId: video.account_id,
+            externalId: video.external_id,
+            url: video.url,
+            thumbnailUrl: video.thumbnail_url,
+            description: video.description,
+            publishedAt: video.published_at,
+            createdAt: video.created_at,
+            stats: latestMetric
+        };
+    });
   }
 };

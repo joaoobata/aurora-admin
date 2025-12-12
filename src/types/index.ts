@@ -38,3 +38,24 @@ export interface Goal {
   deadline?: string;
   isAchieved: boolean;
 }
+
+export interface Video {
+  id: string;
+  accountId: string;
+  externalId?: string;
+  url?: string;
+  thumbnailUrl?: string;
+  description?: string;
+  publishedAt?: string;
+  createdAt: string;
+}
+
+export interface VideoMetric {
+  id: string;
+  videoId: string;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  recordedAt: string;
+}
