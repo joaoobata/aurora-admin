@@ -161,7 +161,7 @@ export const DataService = {
         const { data: firstMetric } = await supabase
             .from('metrics')
             .select('followers, recorded_at')
-            .in('account_id', accounts.map(a => a.id))
+            .in('account_id', (accounts || []).map(a => a.id))
             .order('recorded_at', { ascending: true }) // Ascending = Oldest
             .limit(1)
             .single();
