@@ -34,8 +34,10 @@ export const RapidApiService = {
     // Inspect structure (logging for debug)
     console.log(`📸 IG User Data (${cleanUsername}):`, JSON.stringify(userData, null, 2));
 
-    const user = userData.data || userData; // Adjust based on actual response
-    const userId = user.id || user.pk;
+    const user = userData.data?.user || userData.data || userData; // Adjust based on actual response
+    const userId = user.id || user.pk || user.user_id;
+    const followerCount = user.followers || user.follower_count || user.edge_followed_by?.count || 0;
+    const followingCount = user.following || user.following_count || user.edge_follow?.count || 0;
 
     // 2. Get Posts
     // Endpoint: /user/posts
@@ -67,8 +69,8 @@ export const RapidApiService = {
     return {
         videos,
         profileStats: {
-            followers: user.follower_count || 0,
-            following: user.following_count || 0,
+            followers: followerCount,
+            following: followingCount,
             totalViews: 0,
             totalLikes: 0 // Not standard
         }
@@ -78,6 +80,15 @@ export const RapidApiService = {
   getTikTokData: async (username: string) => {
     const apiKey = getApiKey();
     console.log(`🔑 Using API Key: ${apiKey.substring(0, 5)}...`);
+
+    // 0. Get User Profile (followers/likes)
+    const profileUrl = `https://${TT_HOST}/user/info`;
+    const profileRes = await fetch(`${profileUrl}?unique_id=${username}`, { headers: headers(TT_HOST) });
+    const profileJson = await profileRes.json();
+    console.log(`🎵 TikTok Profile Data (${username}):`, JSON.stringify(profileJson, null, 2));
+
+    const profileUser = profileJson.data?.user || {};
+    const profileStats = profileJson.data?.stats || profileUser.stats || {};
 
     // 1. Get User Feed (Using tiktok-scraper7)
     // Endpoint: /user/posts (verified from playground link provided)
@@ -107,9 +118,9 @@ export const RapidApiService = {
     return {
         videos,
         profileStats: {
-            followers: userInfo.follower_count || 0,
-            following: userInfo.following_count || 0,
-            totalLikes: userInfo.total_favorited || 0,
+            followers: profileStats.followerCount || profileUser.follower_count || 0,
+            following: profileStats.followingCount || profileUser.following_count || 0,
+            totalLikes: profileStats.heartCount || profileStats.totalFavorited || profileUser.total_favorited || 0,
             totalViews: 0 // Not in standard profile obj
         }
     };
