@@ -1,14 +1,15 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Trophy, TrendingUp, Eye } from "lucide-react"
+import { Trophy, Eye, Loader2 } from "lucide-react"
 import { Account } from "@/types"
 
 interface TopAccountsTableProps {
   accounts: (Account & { views?: number })[]
+  isLoading?: boolean
 }
 
-export function TopAccountsTable({ accounts }: TopAccountsTableProps) {
+export function TopAccountsTable({ accounts, isLoading = false }: TopAccountsTableProps) {
   // Sort accounts by views (descending) just in case
   const sortedAccounts = [...accounts].sort((a, b) => (b.views || 0) - (a.views || 0));
 
@@ -18,6 +19,12 @@ export function TopAccountsTable({ accounts }: TopAccountsTableProps) {
         <CardTitle className="flex items-center gap-2 text-lg">
           <Trophy className="h-5 w-5 text-yellow-500" />
           Top Contas
+          {isLoading && (
+            <span className="ml-auto inline-flex items-center gap-2 text-xs font-normal text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Atualizando
+            </span>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>

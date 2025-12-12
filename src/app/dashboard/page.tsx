@@ -1,10 +1,10 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { OverviewChart } from "@/components/dashboard/overview-chart"
 import { Users, Eye, ArrowUpRight, Activity } from "lucide-react"
 import { DataService } from "@/services/data-service"
 import { GlobalSyncButton } from "@/components/dashboard/global-sync-button"
-import { TopAccountsTable } from "@/components/dashboard/top-accounts-table"
 import { ViralVideosCard } from "@/components/dashboard/viral-videos-card"
+import { OverviewCard } from "@/components/dashboard/overview-card"
+import { TopAccountsRealtime } from "@/components/dashboard/top-accounts-realtime"
 
 export const dynamic = 'force-dynamic'
 
@@ -93,22 +93,14 @@ export default async function DashboardPage() {
         
         {/* Left Column: Chart + Viral Videos */}
         <div className="col-span-4 flex flex-col gap-6">
-            <Card className="flex-1">
-            <CardHeader>
-                <CardTitle>Visão Geral</CardTitle>
-                <CardDescription>Performance dos últimos 6 meses</CardDescription>
-            </CardHeader>
-            <CardContent className="pl-2">
-                <OverviewChart data={chartData} />
-            </CardContent>
-            </Card>
+            <OverviewCard initialData={chartData} />
             
             <ViralVideosCard videos={viralVideos} />
         </div>
         
         {/* Right Column: Top Accounts + Recent Activity */}
         <div className="col-span-3 flex flex-col gap-6">
-            <TopAccountsTable accounts={topAccounts} />
+            <TopAccountsRealtime initialAccounts={topAccounts} />
             
             <Card>
             <CardHeader>

@@ -238,12 +238,12 @@ export const DataService = {
      // B) Views History (Approximation: Sum of video_metrics recorded on that day)
      // This is tricky without a daily_stats table. We will mock the "Trend" using the available data points.
      
-     const chartData: Record<string, { views: number, uploads: number }> = {};
+     const chartData: Record<string, { views: number, likes: number, uploads: number }> = {};
      
      // Init empty days
      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
          const key = d.toISOString().split('T')[0]; // YYYY-MM-DD
-         chartData[key] = { views: 0, uploads: 0 };
+         chartData[key] = { views: 0, likes: 0, uploads: 0 };
      }
 
      // Fill Uploads
@@ -255,7 +255,7 @@ export const DataService = {
      // Fill Views (Real Aggregation)
      const { data: metricsInRange } = await supabase
         .from('video_metrics')
-        .select('video_id, views, recorded_at')
+        .select('video_id, views, likes, recorded_at')
         .gte('recorded_at', startDate.toISOString())
         .lte('recorded_at', endDate.toISOString());
         
@@ -266,19 +266,25 @@ export const DataService = {
              
              if (!(chartData[key] as any)._videoMap) (chartData[key] as any)._videoMap = new Map();
              
-             // Store max view count for this video on this day
-             const currentMax = (chartData[key] as any)._videoMap.get(m.video_id) || 0;
-             if (m.views > currentMax) {
-                 (chartData[key] as any)._videoMap.set(m.video_id, m.views);
-             }
+             // Store max view/like count for this video on this day
+             const current = (chartData[key] as any)._videoMap.get(m.video_id) || { views: 0, likes: 0 };
+             (chartData[key] as any)._videoMap.set(m.video_id, {
+                 views: Math.max(current.views, m.views || 0),
+                 likes: Math.max(current.likes, m.likes || 0),
+             });
          });
          
-         // Sum up the max views for all videos on that day
+         // Sum up the max views/likes for all videos on that day
          Object.keys(chartData).forEach(key => {
              if ((chartData[key] as any)._videoMap) {
-                 let dayTotal = 0;
-                 (chartData[key] as any)._videoMap.forEach((v: number) => dayTotal += v);
-                 chartData[key].views = dayTotal;
+                 let dayTotalViews = 0;
+                 let dayTotalLikes = 0;
+                 (chartData[key] as any)._videoMap.forEach((v: { views: number, likes: number }) => {
+                     dayTotalViews += v.views;
+                     dayTotalLikes += v.likes;
+                 });
+                 chartData[key].views = dayTotalViews;
+                 chartData[key].likes = dayTotalLikes;
              }
          });
      }
@@ -286,29 +292,57 @@ export const DataService = {
      return Object.entries(chartData).map(([date, data]) => ({
          name: new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
          views: data.views,
+         likes: data.likes,
          uploads: data.uploads
      }));
   },
 
-  getTopAccounts: async () => {
+  getTopAccounts: async (limit = 5) => {
       const supabase = await createClient();
-      const accounts = await DataService.getAccounts();
-      const accountsWithStats = [];
+      const accounts = (await DataService.getAccounts()).filter(a => a.status === 'active');
+      if (accounts.length === 0) return [];
 
-      for (const acc of accounts) {
-          // Get total views for this account
-          const { data: videos } = await supabase.from('videos').select('id').eq('account_id', acc.id);
-          let views = 0;
-          if (videos) {
-              for (const v of videos) {
-                  const { data: vm } = await supabase.from('video_metrics').select('views').eq('video_id', v.id).order('recorded_at', { ascending: false }).limit(1).single();
-                  if (vm) views += vm.views;
+      const accountIds = accounts.map(a => a.id);
+
+      const { data: videos, error: videosError } = await supabase
+          .from('videos')
+          .select('id, account_id')
+          .in('account_id', accountIds);
+
+      if (videosError) throw videosError;
+
+      const videoIds = (videos || []).map(v => v.id);
+      const latestViewsByVideoId = new Map<string, number>();
+
+      if (videoIds.length > 0) {
+          const { data: metrics, error: metricsError } = await supabase
+              .from('video_metrics')
+              .select('video_id, views, recorded_at')
+              .in('video_id', videoIds)
+              .order('recorded_at', { ascending: false });
+
+          if (metricsError) throw metricsError;
+
+          // Since it's sorted desc, first seen per video is the latest
+          for (const m of metrics || []) {
+              if (!latestViewsByVideoId.has(m.video_id)) {
+                  latestViewsByVideoId.set(m.video_id, m.views || 0);
               }
           }
-          accountsWithStats.push({ ...acc, views });
       }
 
-      return accountsWithStats.sort((a, b) => b.views - a.views).slice(0, 5);
+      const viewsByAccountId = new Map<string, number>();
+      for (const v of videos || []) {
+          const views = latestViewsByVideoId.get(v.id) || 0;
+          viewsByAccountId.set(v.account_id, (viewsByAccountId.get(v.account_id) || 0) + views);
+      }
+
+      const accountsWithStats = accounts.map(acc => ({
+          ...acc,
+          views: viewsByAccountId.get(acc.id) || 0
+      }));
+
+      return accountsWithStats.sort((a, b) => b.views - a.views).slice(0, limit);
   },
 
   getViralVideos: async () => {
@@ -325,7 +359,8 @@ export const DataService = {
             *,
             video_metrics (
                 views,
-                likes
+                likes,
+                recorded_at
             )
         `)
         // We can't order by related table column easily in supabase-js without an RPC or flattened view.
@@ -333,13 +368,18 @@ export const DataService = {
         // Let's go with "Recency" strategy: Get videos posted in last 7 days and sort by views.
         .gte('published_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
         .order('published_at', { ascending: false })
+        .order('recorded_at', { foreignTable: 'video_metrics', ascending: false })
+        .limit(1, { foreignTable: 'video_metrics' })
         .limit(50);
         
       if (error) return [];
       
       // Process and sort
       const processedVideos = videos.map((video: any) => {
-          const latestMetric = video.video_metrics?.[0] || { views: 0, likes: 0 };
+          const latestMetric = (video.video_metrics || [])
+            .slice()
+            .sort((a: any, b: any) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime())[0]
+            || { views: 0, likes: 0 };
           return {
               ...video,
               stats: latestMetric
@@ -382,11 +422,14 @@ export const DataService = {
           views,
           likes,
           comments,
-          shares
+          shares,
+          recorded_at
         )
       `)
       .eq('account_id', accountId)
-      .order('published_at', { ascending: false });
+      .order('published_at', { ascending: false })
+      .order('recorded_at', { foreignTable: 'video_metrics', ascending: false })
+      .limit(1, { foreignTable: 'video_metrics' });
 
     if (error) throw error;
 
@@ -396,7 +439,10 @@ export const DataService = {
         // For simplicity, taking the last one or sorting if needed.
         // Assuming video_metrics array might be populated if we did a join.
         // In Supabase join syntax above, it returns an array of metrics.
-        const latestMetric = video.video_metrics?.[0] || { views: 0, likes: 0, comments: 0, shares: 0 };
+        const latestMetric = (video.video_metrics || [])
+          .slice()
+          .sort((a: any, b: any) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime())[0]
+          || { views: 0, likes: 0, comments: 0, shares: 0 };
         
         return {
             id: video.id,
