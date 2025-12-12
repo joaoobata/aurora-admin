@@ -1,9 +1,9 @@
 import { Account, Metric, Goal } from "@/types";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase-server";
 
 export const DataService = {
   getAccounts: async (): Promise<Account[]> => {
-    if (!supabase) throw new Error("Supabase client not initialized");
+    const supabase = await createClient();
     
     const { data, error } = await supabase
       .from('accounts')
@@ -24,7 +24,7 @@ export const DataService = {
   },
 
   getMetrics: async (accountId: string): Promise<Metric[]> => {
-    if (!supabase) throw new Error("Supabase client not initialized");
+    const supabase = await createClient();
 
     const { data, error } = await supabase
       .from('metrics')
@@ -48,7 +48,7 @@ export const DataService = {
   },
 
   getDashboardStats: async () => {
-    if (!supabase) throw new Error("Supabase client not initialized");
+    const supabase = await createClient();
 
     // Get active accounts count
     const { count: activeAccounts } = await supabase
@@ -71,6 +71,15 @@ export const DataService = {
     
     if (accounts && accounts.length > 0) {
        for (const acc of accounts) {
+         // Check if we have video metrics first (from new crawler)
+         const { data: videoSum } = await supabase
+            .from('video_metrics')
+            .select('views, likes')
+            .eq('video_id', acc.id) // This join logic is complex here, let's stick to legacy 'metrics' table for summary OR aggregate videos if possible.
+            // Actually, best to check 'metrics' table for backward compat or sum videos.
+            // Let's use the 'metrics' table as the "Snapshot" source of truth for account level stats.
+            
+         // Legacy metrics check
          const { data: latestMetric } = await supabase
             .from('metrics')
             .select('views, followers, likes')
@@ -83,6 +92,19 @@ export const DataService = {
             totalViews += latestMetric.views || 0;
             totalFollowers += latestMetric.followers || 0;
             totalLikes += latestMetric.likes || 0;
+         } else {
+             // If no account metrics, maybe sum video metrics?
+             // Fetch videos for account
+             const { data: videos } = await supabase.from('videos').select('id').eq('account_id', acc.id);
+             if (videos && videos.length > 0) {
+                 for (const v of videos) {
+                     const { data: vMetric } = await supabase.from('video_metrics').select('views, likes').eq('video_id', v.id).order('recorded_at', { ascending: false }).limit(1).single();
+                     if (vMetric) {
+                         totalViews += vMetric.views || 0;
+                         totalLikes += vMetric.likes || 0;
+                     }
+                 }
+             }
          }
        }
     }
@@ -107,7 +129,7 @@ export const DataService = {
   },
 
   getAccountDetails: async (accountId: string) => {
-    if (!supabase) throw new Error("Supabase client not initialized");
+    const supabase = await createClient();
     
     const { data: account, error: accountError } = await supabase
       .from('accounts')
@@ -129,7 +151,7 @@ export const DataService = {
   },
 
   getAccountVideos: async (accountId: string) => {
-    if (!supabase) throw new Error("Supabase client not initialized");
+    const supabase = await createClient();
 
     const { data, error } = await supabase
       .from('videos')
@@ -170,7 +192,7 @@ export const DataService = {
   },
 
   getGoals: async (): Promise<(Goal & { account: { username: string, platform: string } })[]> => {
-    if (!supabase) throw new Error("Supabase client not initialized");
+    const supabase = await createClient();
 
     const { data, error } = await supabase
       .from('goals')

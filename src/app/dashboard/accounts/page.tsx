@@ -33,10 +33,13 @@ export default async function AccountsPage() {
                     <span className="h-2 w-2 rounded-full bg-green-500" />
                  )}
               </div>
-              <CardTitle className="text-xl">
-                  <Link href={`/dashboard/accounts/${account.id}`} className="hover:underline">
+              <CardTitle className="text-xl flex items-center gap-2">
+                  <Link href={`/dashboard/accounts/${account.id}`} className="hover:underline truncate">
                     {account.username}
                   </Link>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${account.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                    {account.status}
+                  </span>
               </CardTitle>
               {account.url && (
                   <Link href={account.url} target="_blank" className="text-xs text-muted-foreground flex items-center hover:text-primary">
