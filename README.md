@@ -2,7 +2,7 @@
 
 Aurora Admin é um painel administrativo moderno e responsivo desenvolvido para monitorar, gerenciar e escalar operações de "Dark Accounts" (contas de nicho sem rosto) em múltiplas redes sociais (TikTok, Instagram, YouTube Shorts).
 
-O projeto oferece visualização de métricas em tempo real, acompanhamento de metas e gestão centralizada de múltiplas contas.
+O projeto oferece visualização de métricas, acompanhamento de metas, ranking de contas e gestão centralizada de múltiplas contas.
 
 ## 🚀 Tecnologias Utilizadas
 
@@ -12,15 +12,20 @@ O projeto oferece visualização de métricas em tempo real, acompanhamento de m
 - **Componentes UI:** [shadcn/ui](https://ui.shadcn.com/)
 - **Gráficos:** [Recharts](https://recharts.org/)
 - **Ícones:** [Lucide React](https://lucide.dev/)
-- **Banco de Dados:** [Supabase](https://supabase.com/) (PostgreSQL)
+- **Banco de Dados:** [Supabase](https://supabase.com/) (PostgreSQL + Realtime)
 - **Autenticação:** Supabase Auth
 
 ## 🛠️ Funcionalidades
 
 - **Dashboard Geral:** Visão consolidada de visualizações, seguidores e engajamento.
+- **Visão Geral com filtro de período:** 7/30/90/180/365 dias (gráficos + cards resumo).
+- **Top Contas em tempo real:** ranking atualizado automaticamente quando entram novas métricas.
 - **Gestão de Contas:** Adicione e monitore o status (ativo/inativo) de contas em diferentes plataformas.
 - **Acompanhamento de Metas:** Defina objetivos para suas contas e acompanhe o progresso (ex: chegar a 10k seguidores).
 - **Histórico de Métricas:** Gráficos interativos para visualizar o crescimento ao longo do tempo.
+- **Sync de dados:** botão para atualizar métricas e vídeos.
+- **Tema claro/escuro:** toggle com persistência local (Sol/Lua).
+- **Scraping via RapidAPI:** coleta dados do TikTok/Instagram/YouTube (depende da sua assinatura/chave).
 - **Sistema de Permissões:** Suporte para usuários comuns e Administradores (com visão global).
 
 ## ⚙️ Configuração Local
@@ -29,6 +34,7 @@ O projeto oferece visualização de métricas em tempo real, acompanhamento de m
 
 - Node.js 18+ instalado.
 - Uma conta no Supabase.
+- Uma chave do RapidAPI (para scraping).
 
 ### Passo a Passo
 
@@ -46,17 +52,39 @@ O projeto oferece visualização de métricas em tempo real, acompanhamento de m
 3.  **Configure o Banco de Dados (Supabase):**
     - Crie um novo projeto no Supabase.
     - Vá até o **SQL Editor** no painel do Supabase.
-    - Execute o script contido em `supabase/schema.sql` para criar as tabelas e políticas de segurança.
-    - (Opcional) Para criar um Admin, execute o script em `supabase/create_admin_manual.sql`.
+    - Execute os scripts (na ordem) para criar tabelas e políticas:
+      1. `supabase/schema.sql`
+      2. `supabase/update_admin.sql`
+      3. `supabase/fix_recursion.sql`
+      4. `supabase/schema_videos.sql`
+      5. `supabase/fix_video_constraint.sql`
+    - (Opcional) Para criar um Admin, execute `supabase/create_admin_manual.sql`.
 
-4.  **Configure as Variáveis de Ambiente:**
+4. **Habilitar Realtime (Supabase)**
+    - Painel Supabase: **Database → Replication → Realtime → Realtime tables** e marque:
+      - `accounts`
+      - `videos`
+      - `video_metrics`
+      - `metrics` (opcional)
+    - Alternativa via SQL (SQL Editor):
+      ```sql
+      alter publication supabase_realtime add table public.accounts;
+      alter publication supabase_realtime add table public.videos;
+      alter publication supabase_realtime add table public.video_metrics;
+      alter publication supabase_realtime add table public.metrics;
+      ```
+
+5.  **Configure as Variáveis de Ambiente:**
     - Copie o arquivo de exemplo:
       ```bash
       cp .env.example .env.local
       ```
-    - Preencha o `.env.local` com suas credenciais do Supabase (`NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
+    - Preencha o `.env.local` com:
+      - `NEXT_PUBLIC_SUPABASE_URL`
+      - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+      - `RAPID_API_KEY` (recomendado)
 
-5.  **Rode o projeto:**
+6.  **Rode o projeto:**
     ```bash
     npm run dev
     ```
@@ -70,6 +98,8 @@ O projeto utiliza as seguintes tabelas principais:
 - `accounts`: Contas de redes sociais cadastradas.
 - `metrics`: Histórico diário/semanal de desempenho (views, likes, seguidores).
 - `goals`: Metas estipuladas para cada conta.
+- `videos`: Vídeos das contas.
+- `video_metrics`: Histórico de métricas por vídeo.
 
 ## 📦 Deploy
 
