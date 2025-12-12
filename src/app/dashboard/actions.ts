@@ -6,27 +6,38 @@ import { revalidatePath } from "next/cache"
 export async function createAccount(formData: FormData) {
   const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: "Unauthorized" }
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  
+  if (authError || !user) {
+    console.error("❌ createAccount: User not found or auth error", authError)
+    return { error: "Unauthorized: Please log in again." }
+  }
 
   const username = formData.get("username") as string
   const platform = formData.get("platform") as string
   const url = formData.get("url") as string
   const status = formData.get("status") as string || 'active'
 
+  console.log(`📝 Creating account for user ${user.id}: ${username} (${platform})`)
+
   if (!username || !platform) {
     return { error: "Username and platform are required" }
   }
 
-  const { error } = await supabase.from("accounts").insert({
+  const { error, data } = await supabase.from("accounts").insert({
     user_id: user.id,
     username,
     platform,
     url,
     status
-  })
+  }).select().single()
 
-  if (error) return { error: error.message }
+  if (error) {
+    console.error("❌ createAccount DB Error:", error)
+    return { error: `Database Error: ${error.message}` }
+  }
+
+  console.log("✅ Account created successfully:", data)
 
   revalidatePath("/dashboard/accounts")
   revalidatePath("/dashboard")

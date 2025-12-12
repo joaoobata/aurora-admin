@@ -16,9 +16,12 @@ import { PlusCircle, Loader2 } from "lucide-react"
 import { useState } from "react"
 import { createAccount } from "@/app/dashboard/actions"
 
+import { useRouter } from "next/navigation"
+
 export function AddAccountDialog() {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -32,6 +35,7 @@ export function AddAccountDialog() {
         alert(result.error)
     } else {
         setOpen(false)
+        router.refresh() // Force client-side refresh to show new data
     }
   }
 
