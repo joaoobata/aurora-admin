@@ -24,14 +24,22 @@ export function SyncButton({ accountId, username, platform }: SyncButtonProps) {
         headers: { 'Content-Type': 'application/json' }
       })
       
+      const data = await res.json()
+
       if (res.ok) {
+        if (data.processed > 0) {
+            alert(`Sucesso! ${data.processed} vídeos atualizados.`)
+        } else {
+            alert(`Sincronização concluída, mas nenhum novo dado foi encontrado.`)
+        }
         router.refresh()
       } else {
-        console.error("Failed to sync")
-        alert("Erro ao sincronizar. Verifique o console ou a API Key.")
+        console.error("Failed to sync", data.error)
+        alert(`Erro ao sincronizar: ${data.error}`)
       }
     } catch (e) {
       console.error(e)
+      alert("Erro inesperado ao conectar com o servidor.")
     } finally {
       setLoading(false)
     }
