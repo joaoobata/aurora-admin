@@ -119,33 +119,41 @@ export const RapidApiService = {
     const apiKey = getApiKey();
     console.log(`🔑 Using API Key: ${apiKey.substring(0, 5)}...`);
 
-    // Using youtube138
-    // 1. Channel Details (to get ID and stats)
-    // Endpoint: /channel/details/?id=... (Need to resolve handle first if possible)
-    
-    // NOTE: youtube138 expects 'id' (UC...) usually. If we only have handle (@user), we need to search.
-    // Let's try /channel/search or /search
-    
-    let channelId = username;
-    
-    // Simple logic: if starts with @, assume handle.
-    if (username.startsWith('@') || !username.startsWith('UC')) {
+    // youtube138 expects a channel ID (UC...), while the UI may send handles or vanity names.
+    // Strategy: try direct channel/details with the handle, then fall back to search.
+    const normalizedHandle = username.startsWith('@') ? username : `@${username}`;
+    let channelId = username.startsWith('UC') ? username : '';
+    let channelDetails: any = null;
+
+    const fetchChannelDetails = async (id: string) => {
+        const detailsUrl = `https://${YT_HOST}/channel/details/`;
+        const detailsRes = await fetch(`${detailsUrl}?id=${encodeURIComponent(id)}`, { headers: headers(YT_HOST) });
+        const detailsData = await detailsRes.json();
+        console.log(`📺 YT Channel Details (${id}):`, JSON.stringify(detailsData, null, 2));
+        return detailsData.channelId ? detailsData : null;
+    };
+
+    if (!channelId) {
+        channelDetails = await fetchChannelDetails(normalizedHandle) || await fetchChannelDetails(username);
+        channelId = channelDetails?.channelId || '';
+    }
+
+    if (!channelId) {
         const searchUrl = `https://${YT_HOST}/search`;
-        // Assuming search returns channel ID
-        const searchRes = await fetch(`${searchUrl}?q=${username}&filter=channel`, { headers: headers(YT_HOST) });
+        const searchRes = await fetch(`${searchUrl}?q=${encodeURIComponent(username.replace('@', ''))}&filter=channel`, { headers: headers(YT_HOST) });
         const searchData = await searchRes.json();
         
         console.log(`📺 YT Search Data (${username}):`, JSON.stringify(searchData, null, 2));
-        // Map based on typical response 'contents' -> 'channelRenderer'
-        const channelItem = searchData.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.channelRenderer;
-        
-        if (channelItem?.channelId) {
-            channelId = channelItem.channelId;
-        } else {
-             // Fallback: try mapping from other fields if structure differs
-             // Some APIs return 'data' array
-             channelId = searchData.data?.[0]?.channelId || searchData.results?.[0]?.id;
-        }
+
+        // Newer youtube138 responses return an array of contents with type === "channel"
+        const contents = searchData.contents || [];
+        const channelItem = contents.find((item: any) => item.type === 'channel' && item.channel?.channelId)
+            || contents.find((item: any) => item.channelRenderer?.channelId);
+
+        channelId = channelItem?.channel?.channelId 
+            || channelItem?.channelRenderer?.channelId
+            || searchData.data?.[0]?.channelId 
+            || searchData.results?.[0]?.id;
     }
 
     if (!channelId) throw new Error("YouTube Channel ID not found");
@@ -153,7 +161,7 @@ export const RapidApiService = {
     // 2. Get Channel Videos
     // Endpoint: /channel/videos/
     const videosUrl = `https://${YT_HOST}/channel/videos/`;
-    const videosRes = await fetch(`${videosUrl}?id=${channelId}&filter=videos_latest`, { headers: headers(YT_HOST) });
+    const videosRes = await fetch(`${videosUrl}?id=${encodeURIComponent(channelId)}&filter=videos_latest`, { headers: headers(YT_HOST) });
     const videosData = await videosRes.json();
     
     console.log(`📺 YT Videos Data:`, JSON.stringify(videosData, null, 2));
@@ -161,23 +169,23 @@ export const RapidApiService = {
     const contents = videosData.contents || videosData.data || [];
     
     // 3. Map Videos
-    // youtube138 structure: contents -> videoRenderer
+    // youtube138 structure: contents -> { type: "video", video: {...} }
     const videos = contents.map((item: any) => {
-        const v = item.videoRenderer;
-        if (!v) return null;
-        
-        // Parse views "1.2M views" -> 1200000
-        const viewText = v.viewCountText?.simpleText || "";
-        const views = parseCount(viewText);
-        
+        const v = item.video || item.videoRenderer || item;
+        const videoId = v.videoId || v.id;
+        if (!videoId) return null;
+
+        const viewCount = typeof v.stats?.views === 'number' 
+            ? v.stats.views 
+            : parseCount(v.stats?.views || v.stats?.viewCount || v.viewCountText?.simpleText);
         return {
-            externalId: v.videoId,
-            description: v.title?.runs?.[0]?.text || "",
-            url: `https://www.youtube.com/watch?v=${v.videoId}`,
-            thumbnailUrl: v.thumbnail?.thumbnails?.[0]?.url,
-            publishedAt: v.publishedTimeText?.simpleText, // "2 days ago" (Relative) - Hard to convert to Date accurately without more data
+            externalId: videoId,
+            description: typeof v.title === 'string' ? v.title : v.title?.runs?.[0]?.text || "",
+            url: `https://www.youtube.com/watch?v=${videoId}`,
+            thumbnailUrl: v.thumbnails?.[0]?.url || v.thumbnail?.thumbnails?.[0]?.url,
+            publishedAt: v.publishedTimeText?.simpleText || v.publishedTimeText, // Relative text
             stats: {
-                views: views,
+                views: viewCount,
                 likes: 0, // List view usually doesn't show likes
                 comments: 0,
                 shares: 0
@@ -192,16 +200,12 @@ export const RapidApiService = {
     let totalViews = 0;
     
     try {
-        const detailsUrl = `https://${YT_HOST}/channel/details/`;
-        const detailsRes = await fetch(`${detailsUrl}?id=${channelId}`, { headers: headers(YT_HOST) });
-        const detailsData = await detailsRes.json();
+        const detailsData = channelDetails || await fetchChannelDetails(channelId);
         
-        console.log(`📺 YT Channel Details:`, JSON.stringify(detailsData, null, 2));
-        
-        // Map based on response (usually 'subscriberCountText')
-        const header = detailsData.header?.c4TabbedHeaderRenderer;
-        if (header) {
-            subscribers = parseCount(header.subscriberCountText?.simpleText);
+        if (detailsData) {
+            // Newer response places subscribers/views under stats
+            subscribers = parseCount(detailsData.stats?.subscribers || detailsData.header?.c4TabbedHeaderRenderer?.subscriberCountText?.simpleText);
+            totalViews = parseCount(detailsData.stats?.views);
         }
         
         // Total views often in 'about' tab or metadata, might not be in header.
@@ -223,13 +227,14 @@ export const RapidApiService = {
 };
 
 // Helper
-function parseCount(text: string): number {
-    if (!text) return 0;
+function parseCount(text: string | number): number {
+    if (text === null || text === undefined) return 0;
+    if (typeof text === 'number') return text;
     const clean = text.toUpperCase().replace(/[^0-9.KMB]/g, '');
     let mult = 1;
     if (clean.includes('K')) mult = 1000;
     if (clean.includes('M')) mult = 1000000;
     if (clean.includes('B')) mult = 1000000000;
-    return parseFloat(clean) * mult;
+    const base = parseFloat(clean);
+    return isNaN(base) ? 0 : base * mult;
 }
-
