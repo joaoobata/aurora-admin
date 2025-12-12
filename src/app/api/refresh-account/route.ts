@@ -71,6 +71,10 @@ export async function POST(req: NextRequest) {
         .select()
         .single();
 
+      if (videoError) {
+          console.error(`❌ Failed to upsert video ${video.externalId}:`, videoError.message);
+      }
+
       if (videoRecord) {
          // B. Insert New Metric Record
          const { error: metricError } = await supabase
@@ -84,7 +88,11 @@ export async function POST(req: NextRequest) {
              recorded_at: new Date().toISOString()
            });
            
-         if (!metricError) results.push(videoRecord.id);
+         if (metricError) {
+             console.error(`❌ Failed to insert metrics for video ${videoRecord.id}:`, metricError.message);
+         } else {
+             results.push(videoRecord.id);
+         }
       }
     }
 

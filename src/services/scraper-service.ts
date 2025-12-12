@@ -87,6 +87,9 @@ export const ScraperService = {
           return ScraperService.getMockData(username);
       }
 
+      // Log the first item structure to understand why it might fail mapping
+      console.log("🔍 First Item Structure (Instagram):", JSON.stringify(items[0], null, 2));
+
       return {
         videos: items.map((item: any) => ({
           externalId: item.id,
