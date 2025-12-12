@@ -165,17 +165,17 @@ export const ScraperService = {
     }
 
     try {
-      // Using 'streamers/youtube-scraper'
-      // It supports searching by username/channel URL
+      // Using 'apify/youtube-scraper' (Official)
+      // Supports startUrls for channels
       const channelUrl = username.startsWith('http') ? username : `https://www.youtube.com/@${username.replace('@', '')}`;
       
-      console.log(`🚀 Starting YouTube Scrape for ${channelUrl}...`);
+      console.log(`🚀 Starting YouTube Scrape (Official Actor) for ${channelUrl}...`);
 
-      const run = await client.actor("streamers/youtube-scraper").call({
-        startUrls: [{ url: channelUrl }], // BETTER TARGETING: Use startUrls instead of searchKeywords
+      const run = await client.actor("apify/youtube-scraper").call({
+        startUrls: [{ url: channelUrl }],
         maxResults: 20,
-        postsType: "shorts", // Focus on Shorts as requested
         downloadSubtitles: false,
+        downloadClosedCaptions: false,
       });
 
       console.log(`🤖 YouTube Scraper Run Started: ${run.id}`);
@@ -185,19 +185,14 @@ export const ScraperService = {
 
       if (items.length === 0) {
           console.warn("⚠️ Scraper returned 0 items.");
-          return { videos: [], profileStats: null }; // Return empty but REAL
+          return { videos: [], profileStats: null }; 
       }
 
-      // Log structure for debugging view count mapping issues
-      // Extended logging to see deep structure
-      console.log("🔍 [DEBUG] First Item Structure (YouTube):", JSON.stringify(items[0], null, 2));
-      if (items[0]?.channel) {
-          console.log("🔍 [DEBUG] Channel Info Structure:", JSON.stringify(items[0].channel, null, 2));
-      } else {
-          console.warn("⚠️ [DEBUG] No 'channel' object found in first item.");
-      }
+      // Log structure for debugging
+      console.log("🔍 [DEBUG] First Item Structure (apify/youtube-scraper):", JSON.stringify(items[0], null, 2));
 
-      // Map YouTube Data
+      // Map YouTube Data (apify/youtube-scraper format)
+      // It typically returns video items. Channel stats might be inside each item.
       const videos = items.map((item: any) => ({
           externalId: item.id,
           description: item.title,
@@ -205,41 +200,29 @@ export const ScraperService = {
           thumbnailUrl: item.thumbnailUrl,
           publishedAt: item.date, 
           stats: {
-            // YouTube scraper output mapping fix
-            // Handles various formats: viewCount (int), text ("1.2M views"), or nested stats
-            views: typeof item.viewCount === 'number' ? item.viewCount : 
-                   parseInt(item.viewCount?.toString().replace(/[^0-9]/g, '') || '0') || 0,
-            likes: item.likes || item.likeCount || 0,
-            comments: item.commentsCount || item.numberOfComments || 0,
+            views: item.viewCount || 0,
+            likes: item.likes || 0,
+            comments: item.numberOfComments || 0,
             shares: 0,
           }
       }));
 
-      // Extract Profile Stats (usually in the first item or channel info)
-      // The streamer/youtube-scraper often returns channel info in each video item
-      const channelInfo = (items[0]?.channel || {}) as any;
+      // Extract Profile Stats
+      // The official scraper usually puts channel info in `channelName`, `numberOfSubscribers`, etc.
+      // Sometimes it's flat, sometimes nested.
+      // Based on common output:
+      // item.channelName, item.channelUrl, item.numberOfSubscribers
       
-      // Parse subscribers (might be string "1.2M")
-      let subscribers = 0;
-      if (channelInfo.subscribers) {
-          if (typeof channelInfo.subscribers === 'number') {
-              subscribers = channelInfo.subscribers;
-          } else {
-              // Simple parser for K/M/B suffixes if returned as string
-              const text = channelInfo.subscribers.toString().toUpperCase();
-              const multiplier = text.includes('M') ? 1000000 : text.includes('K') ? 1000 : 1;
-              subscribers = parseFloat(text.replace(/[^0-9.]/g, '')) * multiplier;
-          }
-      }
-
+      const firstItem = items[0];
+      const subscribers = firstItem.numberOfSubscribers || 0;
+      
       return {
         videos,
         profileStats: {
             followers: subscribers || 0,
             following: 0,
-            // Capture total channel views if available (often in channel.viewCount)
-            totalViews: channelInfo.viewCount || 0, 
-            totalLikes: 0 // YouTube API doesn't easily expose total channel likes
+            totalViews: 0, // Official scraper often doesn't give total channel views in video list
+            totalLikes: 0 
         }
       };
 
