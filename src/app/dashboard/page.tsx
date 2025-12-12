@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { OverviewChart } from "@/components/dashboard/overview-chart"
 import { Users, Eye, ArrowUpRight, Activity } from "lucide-react"
 import { DataService } from "@/services/data-service"
+import { GlobalSyncButton } from "@/components/dashboard/global-sync-button"
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +13,10 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <GlobalSyncButton />
+      </div>
       
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>

@@ -12,12 +12,51 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { accountId, platform, username } = await req.json();
+    const body = await req.json().catch(() => ({})); // Handle empty body safely
+    const { accountId, platform, username } = body;
 
-    if (!accountId || !username) {
-      return NextResponse.json({ error: 'Missing accountId or username' }, { status: 400 });
+    // MODE 1: Single Account Refresh
+    if (accountId && username) {
+        return await refreshSingleAccount(supabase, accountId, platform, username);
+    } 
+    
+    // MODE 2: Batch Refresh (All Active Accounts)
+    // If no specific account provided, refresh all active accounts for the user
+    const { data: accounts, error: accError } = await supabase
+        .from('accounts')
+        .select('*')
+        .eq('status', 'active')
+        .eq('user_id', user.id); // Only refresh user's own accounts
+
+    if (accError) throw accError;
+
+    if (!accounts || accounts.length === 0) {
+        return NextResponse.json({ message: "No active accounts to refresh", processed: 0 });
     }
 
+    // Process in parallel but limit concurrency to avoid timeout/rate limits
+    // Ideally use a queue, but for MVP Promise.all is okay for small number of accounts
+    const results = await Promise.allSettled(
+        accounts.map(acc => refreshSingleAccount(supabase, acc.id, acc.platform, acc.username))
+    );
+
+    const successCount = results.filter(r => r.status === 'fulfilled' && (r.value as any).status === 200).length;
+    const errorCount = results.length - successCount;
+
+    return NextResponse.json({ 
+        success: true, 
+        message: `Batch refresh complete. Success: ${successCount}, Errors: ${errorCount}`,
+        processed: successCount
+    });
+
+  } catch (error: any) {
+    console.error("Update Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// Helper function to process a single account
+async function refreshSingleAccount(supabase: any, accountId: string, platform: string, username: string) {
     // 2. Call Scraper (Real or Mock)
     let scrapResult;
     if (platform === 'tiktok') {
@@ -30,10 +69,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Handle legacy return format (array of videos) vs new format ({ videos, profileStats })
-    // The TikTok scraper was returning array, now it returns object.
-    // We updated scraper service to return object for both.
-    
-    // Safety check if scrapedData is array (legacy mock maybe?)
     const scrapedVideos = Array.isArray(scrapResult) ? scrapResult : scrapResult.videos;
     const profileStats = !Array.isArray(scrapResult) ? scrapResult.profileStats : null;
 
@@ -42,18 +77,14 @@ export async function POST(req: NextRequest) {
          await supabase.from('metrics').insert({
              account_id: accountId,
              followers: profileStats.followers || 0,
-             views: 0, // Profile level views not always applicable or sum of videos
+             views: 0, 
              likes: 0, 
              recorded_at: new Date().toISOString()
          });
-         
-         // Also update 'metrics' table is sort of legacy for history. 
-         // Ideally we update account metadata too if we had columns for it.
     }
 
     // 3. Update Database
-    // We loop through videos to upsert them and add new metric records
-    const results = [];
+    let newVideosCount = 0;
     
     for (const video of scrapedVideos) {
       // A. Upsert Video Info
@@ -67,7 +98,7 @@ export async function POST(req: NextRequest) {
           description: video.description,
           published_at: video.publishedAt,
           updated_at: new Date().toISOString()
-        }, { onConflict: 'account_id, external_id' }) // Requires unique constraint in DB ideally, but we query by external_id usually
+        }, { onConflict: 'account_id, external_id' }) 
         .select()
         .single();
 
@@ -91,19 +122,14 @@ export async function POST(req: NextRequest) {
          if (metricError) {
              console.error(`❌ Failed to insert metrics for video ${videoRecord.id}:`, metricError.message);
          } else {
-             results.push(videoRecord.id);
+             newVideosCount++;
          }
       }
     }
 
     return NextResponse.json({ 
       success: true, 
-      processed: results.length,
-      message: `Updated ${results.length} videos for ${username}` 
+      processed: newVideosCount,
+      message: `Updated ${newVideosCount} videos for ${username}` 
     });
-
-  } catch (error: any) {
-    console.error("Update Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
 }

@@ -2,6 +2,7 @@ import { DataService } from "@/services/data-service"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { AddAccountDialog } from "@/components/dashboard/add-account-dialog"
+import { GlobalSyncButton } from "@/components/dashboard/global-sync-button"
 import Link from "next/link"
 import { ExternalLink, Trash2 } from "lucide-react"
 import { DeleteAccountButton } from "@/components/dashboard/delete-account-button"
@@ -20,7 +21,10 @@ export default async function AccountsPage() {
             Gerencie seus perfis e canais monitorados.
           </p>
         </div>
-        <AddAccountDialog />
+        <div className="flex items-center gap-2">
+            <GlobalSyncButton />
+            <AddAccountDialog />
+        </div>
       </div>
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
