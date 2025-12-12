@@ -198,6 +198,7 @@ export const DataService = {
     return {
       totalViews,
       totalFollowers,
+      totalLikes,
       engagementRate,
       activeAccounts: activeAccountsCount,
       growth: {
@@ -418,7 +419,7 @@ export const DataService = {
   getGoals: async (): Promise<(Goal & { account: { username: string, platform: string } })[]> => {
     const supabase = await createClient();
 
-    const { data, error } = await supabase
+    const { data: goals, error } = await supabase
       .from('goals')
       .select(`
         *,
@@ -431,18 +432,60 @@ export const DataService = {
 
     if (error) throw error;
 
-    return data.map((item: any) => ({
-      id: item.id,
-      accountId: item.account_id,
-      metricType: item.metric_type,
-      targetValue: item.target_value,
-      currentValue: item.current_value,
-      deadline: item.deadline,
-      isAchieved: item.is_achieved,
-      account: {
-        username: item.account?.username || 'Unknown',
-        platform: item.account?.platform || 'other'
+    return await Promise.all(goals.map(async (item: any) => {
+      let currentValue = item.current_value;
+
+      if (item.account_id) {
+        // Fetch real-time stats to update progress
+        if (item.metric_type === 'followers') {
+             const { data: m } = await supabase
+                .from('metrics')
+                .select('followers')
+                .eq('account_id', item.account_id)
+                .order('recorded_at', {ascending:false})
+                .limit(1)
+                .single();
+             if (m) currentValue = m.followers;
+        } 
+        else if (item.metric_type === 'views' || item.metric_type === 'likes') {
+             const { data: videos } = await supabase
+                .from('videos')
+                .select('id')
+                .eq('account_id', item.account_id);
+             
+             if (videos && videos.length > 0) {
+                 let total = 0;
+                 // Sum latest metrics for all videos
+                 for (const v of videos) {
+                     const { data: vm } = await supabase
+                        .from('video_metrics')
+                        .select('views, likes')
+                        .eq('video_id', v.id)
+                        .order('recorded_at', {ascending:false})
+                        .limit(1)
+                        .single();
+                     if (vm) {
+                         total += (item.metric_type === 'views' ? vm.views : vm.likes);
+                     }
+                 }
+                 currentValue = total;
+             }
+        }
       }
+
+      return {
+        id: item.id,
+        accountId: item.account_id,
+        metricType: item.metric_type,
+        targetValue: item.target_value,
+        currentValue: currentValue,
+        deadline: item.deadline,
+        isAchieved: item.is_achieved,
+        account: {
+          username: item.account?.username || 'Unknown',
+          platform: item.account?.platform || 'other'
+        }
+      };
     }));
   }
 };
