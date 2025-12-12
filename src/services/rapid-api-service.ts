@@ -1,20 +1,19 @@
 import { Account } from "@/types";
 
-const RAPID_API_KEY = process.env.RAPID_API_KEY;
-
 // API Hosts (Updated based on user request)
 const IG_HOST = 'instagram-scraper-stable-api.p.rapidapi.com';
 const TT_HOST = 'tiktok-scraper7.p.rapidapi.com';
 const YT_HOST = 'youtube138.p.rapidapi.com';
 
 const headers = (host: string) => ({
-  'X-RapidAPI-Key': RAPID_API_KEY || '',
+  'X-RapidAPI-Key': process.env.RAPID_API_KEY || '',
   'X-RapidAPI-Host': host
 });
 
 export const RapidApiService = {
   getInstagramData: async (username: string) => {
-    if (!RAPID_API_KEY) throw new Error("RAPID_API_KEY not found");
+    const apiKey = process.env.RAPID_API_KEY;
+    if (!apiKey) throw new Error("RAPID_API_KEY not found in environment variables");
     
     // 1. Get User Info (Using instagram-scraper-stable-api)
     // Common endpoint: /user/info/v2
@@ -68,7 +67,8 @@ export const RapidApiService = {
   },
 
   getTikTokData: async (username: string) => {
-    if (!RAPID_API_KEY) throw new Error("RAPID_API_KEY not found");
+    const apiKey = process.env.RAPID_API_KEY;
+    if (!apiKey) throw new Error("RAPID_API_KEY not found in environment variables");
 
     // 1. Get User Feed (Using tiktok-scraper7)
     // Endpoint: /user/posts (verified from playground link provided)
