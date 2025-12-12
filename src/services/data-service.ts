@@ -1,4 +1,4 @@
-import { Account, Metric } from "@/types";
+import { Account, Metric, Goal } from "@/types";
 import { supabase } from "@/lib/supabase";
 
 export const DataService = {
@@ -167,5 +167,36 @@ export const DataService = {
             stats: latestMetric
         };
     });
+  },
+
+  getGoals: async (): Promise<(Goal & { account: { username: string, platform: string } })[]> => {
+    if (!supabase) throw new Error("Supabase client not initialized");
+
+    const { data, error } = await supabase
+      .from('goals')
+      .select(`
+        *,
+        account:accounts (
+          username,
+          platform
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return data.map((item: any) => ({
+      id: item.id,
+      accountId: item.account_id,
+      metricType: item.metric_type,
+      targetValue: item.target_value,
+      currentValue: item.current_value,
+      deadline: item.deadline,
+      isAchieved: item.is_achieved,
+      account: {
+        username: item.account?.username || 'Unknown',
+        platform: item.account?.platform || 'other'
+      }
+    }));
   }
 };
