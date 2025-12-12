@@ -69,49 +69,81 @@ export const ScraperService = {
     try {
       // Clean username (remove @ if present)
       const cleanUsername = username.replace('@', '');
+      const profileUrl = `https://www.instagram.com/${cleanUsername}/`;
       
-      // Using 'apify/instagram-scraper' with direct URLs is more reliable
-      const run = await client.actor("apify/instagram-scraper").call({
-        directUrls: [`https://www.instagram.com/${cleanUsername}/`],
-        resultsType: "posts",
-        resultsLimit: 15, // Changed from limit to resultsLimit as per common actor spec
-      });
+      console.log(`🚀 Starting Hybrid Instagram Scrape for ${cleanUsername}...`);
 
-      console.log(`🤖 Instagram Scraper Run Started: ${run.id}`);
-      const { items } = await client.dataset(run.defaultDatasetId).listItems();
+      // Parallel execution: Get Posts AND Profile Details
+      const [postsRun, detailsRun] = await Promise.all([
+          // 1. Get Posts
+          client.actor("apify/instagram-scraper").call({
+            directUrls: [profileUrl],
+            resultsType: "posts",
+            resultsLimit: 15,
+          }),
+          // 2. Get Profile Details (specifically for followers count)
+          client.actor("apify/instagram-scraper").call({
+            directUrls: [profileUrl],
+            resultsType: "details",
+            resultsLimit: 1, 
+          })
+      ]);
+
+      console.log(`🤖 Scraper Runs Started. Posts: ${postsRun.id}, Details: ${detailsRun.id}`);
+
+      // Fetch results
+      const [postsDataset, detailsDataset] = await Promise.all([
+          client.dataset(postsRun.defaultDatasetId).listItems(),
+          client.dataset(detailsRun.defaultDatasetId).listItems()
+      ]);
       
-      console.log(`📊 Scraper returned ${items.length} items for ${cleanUsername}`);
+      const postsItems = postsDataset.items;
+      const detailsItems = detailsDataset.items;
       
-      if (items.length === 0) {
-          console.warn("⚠️ Scraper returned 0 items. Falling back to Mock Data for user satisfaction.");
+      console.log(`📊 Scraper returned ${postsItems.length} posts and ${detailsItems.length} profile details.`);
+      
+      if (postsItems.length === 0 && detailsItems.length === 0) {
+          console.warn("⚠️ Scraper returned 0 items for both calls. Falling back to Mock Data.");
           return ScraperService.getMockData(username);
       }
 
-      // Log the first item structure to understand why it might fail mapping
-      console.log("🔍 First Item Structure (Instagram):", JSON.stringify(items[0], null, 2));
-
-      return {
-        videos: items.map((item: any) => ({
+      // Map Posts
+      const videos = postsItems.map((item: any) => ({
           externalId: item.id,
           description: item.caption,
           url: item.url,
           thumbnailUrl: item.displayUrl,
           publishedAt: item.timestamp,
           stats: {
-            // Instagram API variants: videoViewCount, videoPlayCount, or viewCount
             views: item.videoPlayCount || item.videoViewCount || item.viewCount || 0,
             likes: item.likesCount,
             comments: item.commentsCount,
             shares: 0,
           }
-        })),
-        profileStats: items[0]?.owner ? {
-             // Try to find followers count in owner object, fallback to 0 if not found
-             // Note: 'apify/instagram-scraper' in 'posts' mode might not return full owner details.
-             // We need to check if owner object has followersCount.
-             followers: (items[0].owner as any).followersCount || 0,
-             following: (items[0].owner as any).followsCount || 0
-        } : null
+      }));
+
+      // Extract Profile Stats from Details run (preferred) or fallback to Posts run owner object
+      let profileStats = null;
+      
+      if (detailsItems.length > 0) {
+          const profile = detailsItems[0] as any;
+          console.log("🔍 Found Profile Details:", JSON.stringify(profile, null, 2)); // Debug log
+          profileStats = {
+              followers: profile.followersCount || 0,
+              following: profile.followsCount || 0
+          };
+      } else if (postsItems.length > 0 && (postsItems[0] as any).owner) {
+          // Fallback to owner object in posts if details failed
+          const owner = (postsItems[0] as any).owner;
+          profileStats = {
+              followers: owner.followersCount || 0,
+              following: owner.followsCount || 0
+          };
+      }
+
+      return {
+        videos,
+        profileStats
       };
 
     } catch (error) {
