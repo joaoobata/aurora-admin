@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { LayoutDashboard, Target, Settings, LogOut, Users } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { ThemeToggle } from "@/components/dashboard/theme-toggle"
 
 export function Sidebar() {
   return (
@@ -44,6 +44,9 @@ export function Sidebar() {
           </nav>
         </div>
         <div className="mt-auto p-4">
+            <div className="mb-3">
+              <ThemeToggle />
+            </div>
             <button className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary w-full">
                 <LogOut className="h-4 w-4" />
                 Sair
