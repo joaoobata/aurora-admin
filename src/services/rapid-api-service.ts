@@ -107,7 +107,8 @@ export const RapidApiService = {
   },
 
   getYouTubeData: async (username: string) => {
-    if (!RAPID_API_KEY) throw new Error("RAPID_API_KEY not found");
+    const apiKey = process.env.RAPID_API_KEY;
+    if (!apiKey) throw new Error("RAPID_API_KEY not found");
 
     // Using youtube138
     // 1. Channel Details (to get ID and stats)
