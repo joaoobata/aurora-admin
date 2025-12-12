@@ -189,7 +189,13 @@ export const ScraperService = {
       }
 
       // Log structure for debugging view count mapping issues
-      console.log("🔍 First Item Structure (YouTube):", JSON.stringify(items[0], null, 2));
+      // Extended logging to see deep structure
+      console.log("🔍 [DEBUG] First Item Structure (YouTube):", JSON.stringify(items[0], null, 2));
+      if (items[0]?.channel) {
+          console.log("🔍 [DEBUG] Channel Info Structure:", JSON.stringify(items[0].channel, null, 2));
+      } else {
+          console.warn("⚠️ [DEBUG] No 'channel' object found in first item.");
+      }
 
       // Map YouTube Data
       const videos = items.map((item: any) => ({
