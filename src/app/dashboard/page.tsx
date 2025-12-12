@@ -26,7 +26,14 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalViews.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">+20.1% este mês</p>
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                {stats.growth?.views && parseFloat(stats.growth.views) > 0 ? (
+                    <span className="text-green-600">+{stats.growth.views}%</span>
+                ) : (
+                    <span className="text-muted-foreground">0%</span>
+                )}
+                <span className="opacity-70">este mês</span>
+            </p>
           </CardContent>
         </Card>
         
@@ -37,7 +44,14 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">+{stats.totalFollowers.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">+180 novos hoje</p>
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                {stats.growth?.followers && parseFloat(stats.growth.followers) > 0 ? (
+                    <span className="text-green-600">+{stats.growth.followers}%</span>
+                ) : (
+                    <span className="text-muted-foreground">0%</span>
+                )}
+                <span className="opacity-70">este mês</span>
+            </p>
           </CardContent>
         </Card>
         
