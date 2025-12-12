@@ -139,8 +139,61 @@ export const DataService = {
     const engagementRate = totalViews > 0 ? ((totalLikes / totalViews) * 100).toFixed(2) : 0;
 
     // --- Growth Calculation ---
-    // (Simplified for now to avoid complexity overload in this refactor step)
-    // We keep the logic "vs 30 days ago" for the indicator
+    // If we have history (> 30 days), we use it.
+    // If not, we use the OLDEST available record to show growth since tracking started.
+    
+    // Default: Stable if no comparison point
+    let followersGrowth = "0"; 
+    let viewsGrowth = "0";
+
+    // Calculate Followers Growth
+    if (prevTotalFollowers > 0) {
+        // Standard comparison
+        followersGrowth = (((totalFollowers - prevTotalFollowers) / prevTotalFollowers) * 100).toFixed(1);
+    } else if (totalFollowers > 0) {
+        // New account scenario: If we have 0 previous but >0 current, it's 100% growth or "New"
+        // But to be consistent with requested logic:
+        // We check if we have ANY old metric.
+        // If we have an old metric and it was 0, then growth is infinite (show 100% or absolute gain).
+        // If we have NO old metrics (first sync ever), growth is 0% (baseline).
+        
+        // Let's refine: If we found 'oldMetrics' (tracking started > 0 days ago) and it was 0, it's growth.
+        // If we didn't find any old metrics (tracking just started today), growth is 0.
+        
+        // We need to know if we are comparing against a real previous point.
+        // Re-query: Get the VERY FIRST metric ever recorded for these accounts.
+        
+        const { data: firstMetric } = await supabase
+            .from('metrics')
+            .select('followers, recorded_at')
+            .in('account_id', accounts.map(a => a.id))
+            .order('recorded_at', { ascending: true }) // Ascending = Oldest
+            .limit(1)
+            .single();
+            
+        if (firstMetric) {
+            // If the oldest metric is not from today (e.g. > 24h ago), we can calculate growth since then.
+            const firstDate = new Date(firstMetric.recorded_at);
+            const today = new Date();
+            const diffHours = (today.getTime() - firstDate.getTime()) / (1000 * 60 * 60);
+            
+            if (diffHours > 24) {
+                // We have history! Even if < 30 days.
+                const initialFollowers = firstMetric.followers || 0;
+                if (initialFollowers > 0) {
+                    followersGrowth = (((totalFollowers - initialFollowers) / initialFollowers) * 100).toFixed(1);
+                } else {
+                    followersGrowth = "100"; // Grew from 0
+                }
+            }
+        }
+    }
+
+    // Calculate Views Growth (Similar logic or placeholder if video history is heavy)
+    // For MVP, if we have Total Views > 0 and it's not the first sync, we likely grew.
+    // Let's apply similar "First vs Current" logic if 30-day history is missing.
+    // Simplified: If Total Views > 0, assume positive trend if not fresh.
+    // For now, let's leave views growth as 0 unless we implement full video delta history aggregation.
     
     return {
       totalViews,
@@ -148,8 +201,8 @@ export const DataService = {
       engagementRate,
       activeAccounts: activeAccountsCount,
       growth: {
-          followers: "0", // dynamic calculation pending
-          views: "0",
+          followers: followersGrowth,
+          views: viewsGrowth, // Keep 0 for safety until deep aggregation is ready
           engagement: "0" 
       }
     };
