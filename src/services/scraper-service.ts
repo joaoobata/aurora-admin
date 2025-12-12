@@ -13,8 +13,8 @@ export const ScraperService = {
    */
   scrapeTikTok: async (username: string) => {
     if (!client) {
-      console.warn("⚠️ APIFY_API_TOKEN not found. Returning mock data.");
-      return ScraperService.getMockData(username);
+      console.warn("⚠️ APIFY_API_TOKEN not found.");
+      throw new Error("Apify Token not found");
     }
 
     try {
@@ -62,8 +62,8 @@ export const ScraperService = {
 
   scrapeInstagram: async (username: string) => {
     if (!client) {
-      console.warn("⚠️ APIFY_API_TOKEN not found. Returning mock data.");
-      return ScraperService.getMockData(username);
+      console.warn("⚠️ APIFY_API_TOKEN not found.");
+      throw new Error("Apify Token not found");
     }
 
     try {
@@ -103,8 +103,8 @@ export const ScraperService = {
       console.log(`📊 Scraper returned ${postsItems.length} posts and ${detailsItems.length} profile details.`);
       
       if (postsItems.length === 0 && detailsItems.length === 0) {
-          console.warn("⚠️ Scraper returned 0 items for both calls. Falling back to Mock Data.");
-          return ScraperService.getMockData(username);
+          console.warn("⚠️ Scraper returned 0 items for both calls.");
+          return { videos: [], profileStats: null }; // Return empty but REAL
       }
 
       // Map Posts
@@ -154,8 +154,8 @@ export const ScraperService = {
 
   scrapeYoutube: async (username: string) => {
     if (!client) {
-      console.warn("⚠️ APIFY_API_TOKEN not found. Returning mock data.");
-      return ScraperService.getMockData(username);
+      console.warn("⚠️ APIFY_API_TOKEN not found.");
+      throw new Error("Apify Token not found");
     }
 
     try {
@@ -166,7 +166,7 @@ export const ScraperService = {
       console.log(`🚀 Starting YouTube Scrape for ${channelUrl}...`);
 
       const run = await client.actor("streamers/youtube-scraper").call({
-        searchKeywords: [channelUrl], // Or startUrls if supported better
+        startUrls: [{ url: channelUrl }], // BETTER TARGETING: Use startUrls instead of searchKeywords
         maxResults: 20,
         postsType: "shorts", // Focus on Shorts as requested
         downloadSubtitles: false,
@@ -178,8 +178,8 @@ export const ScraperService = {
       console.log(`📊 Scraper returned ${items.length} items for ${username}`);
 
       if (items.length === 0) {
-          console.warn("⚠️ Scraper returned 0 items. Falling back to Mock Data.");
-          return ScraperService.getMockData(username);
+          console.warn("⚠️ Scraper returned 0 items.");
+          return { videos: [], profileStats: null }; // Return empty but REAL
       }
 
       // Log structure for debugging view count mapping issues
