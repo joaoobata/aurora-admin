@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { ScraperService } from '@/services/scraper-service';
+import { RapidApiService } from '@/services/rapid-api-service';
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -57,17 +58,40 @@ export async function POST(req: NextRequest) {
 
 // Helper function to process a single account
 async function refreshSingleAccount(supabase: any, accountId: string, platform: string, username: string) {
-    // 2. Call Scraper (Real or Mock)
+    // 2. Call Scraper (Preferred: RapidAPI, Fallback: Apify, Last: Mock)
     let scrapResult;
-    if (platform === 'tiktok') {
-        scrapResult = await ScraperService.scrapeTikTok(username);
-    } else if (platform === 'instagram') {
-        scrapResult = await ScraperService.scrapeInstagram(username);
-    } else if (platform === 'youtube') {
-        scrapResult = await ScraperService.scrapeYoutube(username);
-    } else {
-        // Fallback for other platforms or mock
-        scrapResult = ScraperService.getMockData(username);
+    const useRapidApi = !!process.env.RAPID_API_KEY;
+
+    try {
+        if (useRapidApi) {
+            console.log(`🚀 Using RapidAPI for ${platform} (${username})`);
+            if (platform === 'tiktok') {
+                scrapResult = await RapidApiService.getTikTokData(username);
+            } else if (platform === 'instagram') {
+                scrapResult = await RapidApiService.getInstagramData(username);
+            } else if (platform === 'youtube') {
+                scrapResult = await RapidApiService.getYouTubeData(username);
+            } else {
+                // Fallback for others
+                scrapResult = ScraperService.getMockData(username);
+            }
+        } else {
+            console.log(`⚠️ RapidAPI Key missing, falling back to Apify/Mock for ${platform}`);
+            if (platform === 'tiktok') {
+                scrapResult = await ScraperService.scrapeTikTok(username);
+            } else if (platform === 'instagram') {
+                scrapResult = await ScraperService.scrapeInstagram(username);
+            } else if (platform === 'youtube') {
+                scrapResult = await ScraperService.scrapeYoutube(username);
+            } else {
+                scrapResult = ScraperService.getMockData(username);
+            }
+        }
+    } catch (e: any) {
+        console.error(`❌ Scraper failed for ${platform} user ${username}:`, e.message);
+        // Optional: Fail gracefully or throw?
+        // Let's throw so the batch processor records it as error
+        throw e;
     }
 
     // Handle legacy return format (array of videos) vs new format ({ videos, profileStats })
