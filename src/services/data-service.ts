@@ -275,6 +275,44 @@ export const DataService = {
       return accountsWithStats.sort((a, b) => b.views - a.views).slice(0, 5);
   },
 
+  getViralVideos: async () => {
+      const supabase = await createClient();
+      
+      // Fetch recent videos with high views (simple heuristic: top 5 by views from all time, 
+      // ideally would be delta views in last 24h)
+      // Since we don't have delta history table easily accessible for all, 
+      // we'll fetch top 5 videos by absolute views across all accounts.
+      
+      const { data: videos, error } = await supabase
+        .from('videos')
+        .select(`
+            *,
+            video_metrics (
+                views,
+                likes
+            )
+        `)
+        // We can't order by related table column easily in supabase-js without an RPC or flattened view.
+        // So we fetch latest 50 videos and sort in JS for "Recency Viral" or fetch all and sort for "All Time Viral".
+        // Let's go with "Recency" strategy: Get videos posted in last 7 days and sort by views.
+        .gte('published_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+        .order('published_at', { ascending: false })
+        .limit(50);
+        
+      if (error) return [];
+      
+      // Process and sort
+      const processedVideos = videos.map((video: any) => {
+          const latestMetric = video.video_metrics?.[0] || { views: 0, likes: 0 };
+          return {
+              ...video,
+              stats: latestMetric
+          };
+      });
+      
+      return processedVideos.sort((a, b) => b.stats.views - a.stats.views).slice(0, 5);
+  },
+
   getAccountDetails: async (accountId: string) => {
     const supabase = await createClient();
     
