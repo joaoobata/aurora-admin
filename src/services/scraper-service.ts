@@ -204,7 +204,7 @@ export const ScraperService = {
       return {
         videos,
         profileStats: {
-            followers: channelInfo.subscribers || 0,
+            followers: (channelInfo as any).subscribers || 0,
             following: 0 // YouTube doesn't expose 'following' count easily
         }
       };
