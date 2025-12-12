@@ -136,7 +136,7 @@ export const DataService = {
     let prevTotalFollowers = 0;
     
     // Fetch historical profile metrics
-    if (accounts.length > 0) {
+    if (accounts && accounts.length > 0) {
         const { data: oldMetrics } = await supabase
             .from('metrics')
             .select('followers, account_id')
