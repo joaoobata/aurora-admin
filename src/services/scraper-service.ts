@@ -49,8 +49,8 @@ export const ScraperService = {
       return {
         videos,
         profileStats: items[0]?.authorMeta ? {
-            followers: items[0].authorMeta.fans,
-            following: items[0].authorMeta.following,
+            followers: (items[0].authorMeta as any).fans,
+            following: (items[0].authorMeta as any).following,
         } : null
       };
 
