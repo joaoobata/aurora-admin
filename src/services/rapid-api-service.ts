@@ -1,19 +1,28 @@
 import { Account } from "@/types";
 
+// Hardcoded fallback key provided by user (Note: Best practice is using ENV vars, but using this as fallback for reliability)
+const FALLBACK_KEY = '6d1392d5d9msh4f7b0dd915d1acap1cece3jsnf8a5d8f7ac5b';
+
 // API Hosts (Updated based on user request)
 const IG_HOST = 'instagram-scraper-stable-api.p.rapidapi.com';
 const TT_HOST = 'tiktok-scraper7.p.rapidapi.com';
 const YT_HOST = 'youtube138.p.rapidapi.com';
 
+const getApiKey = () => {
+    const key = process.env.RAPID_API_KEY || FALLBACK_KEY;
+    if (!key) throw new Error("RAPID_API_KEY not found in env or fallback");
+    return key;
+}
+
 const headers = (host: string) => ({
-  'X-RapidAPI-Key': process.env.RAPID_API_KEY || '',
+  'X-RapidAPI-Key': getApiKey(),
   'X-RapidAPI-Host': host
 });
 
 export const RapidApiService = {
   getInstagramData: async (username: string) => {
-    const apiKey = process.env.RAPID_API_KEY;
-    if (!apiKey) throw new Error("RAPID_API_KEY not found in environment variables");
+    const apiKey = getApiKey();
+    console.log(`🔑 Using API Key: ${apiKey.substring(0, 5)}...`);
     
     // 1. Get User Info (Using instagram-scraper-stable-api)
     // Common endpoint: /user/info/v2
@@ -67,8 +76,8 @@ export const RapidApiService = {
   },
 
   getTikTokData: async (username: string) => {
-    const apiKey = process.env.RAPID_API_KEY;
-    if (!apiKey) throw new Error("RAPID_API_KEY not found in environment variables");
+    const apiKey = getApiKey();
+    console.log(`🔑 Using API Key: ${apiKey.substring(0, 5)}...`);
 
     // 1. Get User Feed (Using tiktok-scraper7)
     // Endpoint: /user/posts (verified from playground link provided)
@@ -107,8 +116,8 @@ export const RapidApiService = {
   },
 
   getYouTubeData: async (username: string) => {
-    const apiKey = process.env.RAPID_API_KEY;
-    if (!apiKey) throw new Error("RAPID_API_KEY not found");
+    const apiKey = getApiKey();
+    console.log(`🔑 Using API Key: ${apiKey.substring(0, 5)}...`);
 
     // Using youtube138
     // 1. Channel Details (to get ID and stats)
