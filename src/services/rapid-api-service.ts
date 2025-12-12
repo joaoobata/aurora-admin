@@ -211,6 +211,29 @@ export const RapidApiService = {
         };
     }).filter(Boolean);
 
+    // Fallback: shorts responses often omit view stats; fetch details for any video with 0 views to populate stats.
+    const videosNeedingDetails = videos.filter((v: any) => !v.stats?.views || v.stats.views === 0);
+    if (videosNeedingDetails.length > 0) {
+        await Promise.all(videosNeedingDetails.map(async (vid: any) => {
+            try {
+                const detailRes = await fetch(`https://${YT_HOST}/video/details/?id=${encodeURIComponent(vid.externalId)}`, { headers: headers(YT_HOST) });
+                const detailJson = await detailRes.json();
+                const detailViews = detailJson.stats?.views || parseCount(detailJson.stats?.shortViewCountText?.simpleText);
+                const detailLikes = detailJson.stats?.likes;
+                if (detailViews) vid.stats.views = detailViews;
+                if (detailLikes) vid.stats.likes = detailLikes;
+                if (!vid.thumbnailUrl && detailJson.thumbnails?.length) {
+                    vid.thumbnailUrl = detailJson.thumbnails[0].url;
+                }
+                if (!vid.publishedAt && detailJson.publishedDate) {
+                    vid.publishedAt = detailJson.publishedDate;
+                }
+            } catch (err) {
+                console.warn(`⚠️ Failed to fetch details for video ${vid.externalId}`, err);
+            }
+        }));
+    }
+
     // 4. Get Channel Stats (Subscribers)
     // We try to fetch details if we have the channel ID
     // Endpoint: /channel/details/?id=...
