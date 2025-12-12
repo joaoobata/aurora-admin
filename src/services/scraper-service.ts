@@ -102,8 +102,8 @@ export const ScraperService = {
         // We'll return profile stats if we can find them, otherwise null
         // Often scraper returns a special item for profile
         profileStats: items[0]?.owner ? {
-             followers: items[0].owner.followersCount, // Sometimes available on post object
-             following: items[0].owner.followsCount
+             followers: (items[0].owner as any).followersCount, // Sometimes available on post object
+             following: (items[0].owner as any).followsCount
         } : null
       };
 
