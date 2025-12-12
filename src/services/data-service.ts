@@ -147,12 +147,7 @@ export const DataService = {
     let viewsGrowth = "0";
 
     // Calculate Followers Growth
-    if (prevTotalFollowers > 0) {
-        // Standard comparison
-        followersGrowth = (((totalFollowers - prevTotalFollowers) / prevTotalFollowers) * 100).toFixed(1);
-    } else if (totalFollowers > 0) {
-        // New account scenario: If we have 0 previous but >0 current, it's 100% growth or "New"
-        // But to be consistent with requested logic:
+    if (totalFollowers > 0) {
         // We check if we have ANY old metric.
         // If we have an old metric and it was 0, then growth is infinite (show 100% or absolute gain).
         // If we have NO old metrics (first sync ever), growth is 0% (baseline).
