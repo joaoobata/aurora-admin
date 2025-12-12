@@ -71,38 +71,40 @@ export const DataService = {
     
     if (accounts && accounts.length > 0) {
        for (const acc of accounts) {
-         // Check if we have video metrics first (from new crawler)
-         const { data: videoSum } = await supabase
-            .from('video_metrics')
-            .select('views, likes')
-            .eq('video_id', acc.id) // This join logic is complex here, let's stick to legacy 'metrics' table for summary OR aggregate videos if possible.
-            // Actually, best to check 'metrics' table for backward compat or sum videos.
-            // Let's use the 'metrics' table as the "Snapshot" source of truth for account level stats.
-            
-         // Legacy metrics check
-         const { data: latestMetric } = await supabase
+         // 1. Get Followers from 'metrics' (which stores profile stats now)
+         const { data: latestProfileMetric } = await supabase
             .from('metrics')
-            .select('views, followers, likes')
+            .select('followers')
             .eq('account_id', acc.id)
             .order('recorded_at', { ascending: false })
             .limit(1)
             .single();
             
-         if (latestMetric) {
-            totalViews += latestMetric.views || 0;
-            totalFollowers += latestMetric.followers || 0;
-            totalLikes += latestMetric.likes || 0;
-         } else {
-             // If no account metrics, maybe sum video metrics?
-             // Fetch videos for account
-             const { data: videos } = await supabase.from('videos').select('id').eq('account_id', acc.id);
-             if (videos && videos.length > 0) {
-                 for (const v of videos) {
-                     const { data: vMetric } = await supabase.from('video_metrics').select('views, likes').eq('video_id', v.id).order('recorded_at', { ascending: false }).limit(1).single();
-                     if (vMetric) {
-                         totalViews += vMetric.views || 0;
-                         totalLikes += vMetric.likes || 0;
-                     }
+         if (latestProfileMetric) {
+             totalFollowers += latestProfileMetric.followers || 0;
+         }
+
+         // 2. Sum Views and Likes from 'video_metrics' (Aggregation)
+         // We first find all videos for this account
+         const { data: videos } = await supabase
+            .from('videos')
+            .select('id')
+            .eq('account_id', acc.id);
+            
+         if (videos && videos.length > 0) {
+             // For each video, get its LATEST metric
+             for (const video of videos) {
+                 const { data: latestVideoMetric } = await supabase
+                    .from('video_metrics')
+                    .select('views, likes')
+                    .eq('video_id', video.id)
+                    .order('recorded_at', { ascending: false })
+                    .limit(1)
+                    .single();
+                 
+                 if (latestVideoMetric) {
+                     totalViews += latestVideoMetric.views || 0;
+                     totalLikes += latestVideoMetric.likes || 0;
                  }
              }
          }
