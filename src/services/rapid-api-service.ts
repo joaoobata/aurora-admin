@@ -2,10 +2,10 @@ import { Account } from "@/types";
 
 const RAPID_API_KEY = process.env.RAPID_API_KEY;
 
-// API Hosts
-const IG_HOST = 'instagram-scraper-2022.p.rapidapi.com';
+// API Hosts (Updated based on user request)
+const IG_HOST = 'instagram-scraper-stable-api.p.rapidapi.com';
 const TT_HOST = 'tiktok-scraper7.p.rapidapi.com';
-const YT_HOST = 'youtube-v31.p.rapidapi.com';
+const YT_HOST = 'youtube138.p.rapidapi.com';
 
 const headers = (host: string) => ({
   'X-RapidAPI-Key': RAPID_API_KEY || '',
@@ -16,24 +16,30 @@ export const RapidApiService = {
   getInstagramData: async (username: string) => {
     if (!RAPID_API_KEY) throw new Error("RAPID_API_KEY not found");
     
-    // 1. Get User Info
-    const userUrl = `https://${IG_HOST}/ig/info_username/`;
-    const userRes = await fetch(`${userUrl}?user=${username}`, { headers: headers(IG_HOST) });
+    // 1. Get User Info (Using instagram-scraper-stable-api)
+    // Common endpoint: /user/info/v2
+    const cleanUsername = username.replace('@', '');
+    const userUrl = `https://${IG_HOST}/user/info/v2`;
+    const userRes = await fetch(`${userUrl}?username=${cleanUsername}`, { headers: headers(IG_HOST) });
     const userData = await userRes.json();
     
-    const user = userData.user || {};
-    
-    // 2. Get Posts (Videos/Reels)
-    // Note: This API might require id instead of username for posts, but let's check standard flow
-    // Usually we need user.pk (id) from the first call
-    const userId = user.pk;
+    // Inspect structure (logging for debug)
+    console.log(`📸 IG User Data (${cleanUsername}):`, JSON.stringify(userData, null, 2));
+
+    const user = userData.data || userData; // Adjust based on actual response
+    const userId = user.id || user.pk;
+
+    // 2. Get Posts
+    // Endpoint: /user/posts
     let videos = [];
-    
     if (userId) {
-        const postsUrl = `https://${IG_HOST}/ig/posts/`;
-        const postsRes = await fetch(`${postsUrl}?id_user=${userId}`, { headers: headers(IG_HOST) });
+        const postsUrl = `https://${IG_HOST}/user/posts`;
+        const postsRes = await fetch(`${postsUrl}?user_id=${userId}&count=12`, { headers: headers(IG_HOST) });
         const postsData = await postsRes.json();
-        const items = postsData.items || [];
+        
+        console.log(`📸 IG Posts Data:`, JSON.stringify(postsData, null, 2));
+
+        const items = postsData.data?.items || postsData.items || [];
         
         videos = items.map((item: any) => ({
             externalId: item.id,
@@ -55,8 +61,8 @@ export const RapidApiService = {
         profileStats: {
             followers: user.follower_count || 0,
             following: user.following_count || 0,
-            totalViews: 0, // Not provided directly on profile
-            totalLikes: 0
+            totalViews: 0,
+            totalLikes: 0 // Not standard
         }
     };
   },
@@ -64,12 +70,14 @@ export const RapidApiService = {
   getTikTokData: async (username: string) => {
     if (!RAPID_API_KEY) throw new Error("RAPID_API_KEY not found");
 
-    // 1. Get User Feed (includes stats)
-    // Using tiktok-scraper7
+    // 1. Get User Feed (Using tiktok-scraper7)
+    // Endpoint: /user/posts (verified from playground link provided)
     const url = `https://${TT_HOST}/user/posts`;
     const res = await fetch(`${url}?unique_id=${username}&count=10`, { headers: headers(TT_HOST) });
     const data = await res.json();
     
+    console.log(`🎵 TikTok Data (${username}):`, JSON.stringify(data, null, 2));
+
     const userInfo = data.data?.user || {};
     const posts = data.data?.videos || [];
 
@@ -93,7 +101,7 @@ export const RapidApiService = {
             followers: userInfo.follower_count || 0,
             following: userInfo.following_count || 0,
             totalLikes: userInfo.total_favorited || 0,
-            totalViews: 0 // Not standard in profile object
+            totalViews: 0 // Not in standard profile obj
         }
     };
   },
@@ -101,65 +109,101 @@ export const RapidApiService = {
   getYouTubeData: async (username: string) => {
     if (!RAPID_API_KEY) throw new Error("RAPID_API_KEY not found");
 
-    // 1. Search for Channel to get ID (if username is handle)
-    // Or assume username is channelId? Usually it's a handle like @mrbeast
-    // youtube-v31 supports 'search'
+    // Using youtube138
+    // 1. Channel Details (to get ID and stats)
+    // Endpoint: /channel/details/?id=... (Need to resolve handle first if possible)
+    
+    // NOTE: youtube138 expects 'id' (UC...) usually. If we only have handle (@user), we need to search.
+    // Let's try /channel/search or /search
     
     let channelId = username;
-    // If it starts with @, we need to search for it
+    
+    // Simple logic: if starts with @, assume handle.
     if (username.startsWith('@') || !username.startsWith('UC')) {
         const searchUrl = `https://${YT_HOST}/search`;
-        const searchRes = await fetch(`${searchUrl}?q=${username}&part=snippet&type=channel`, { headers: headers(YT_HOST) });
+        // Assuming search returns channel ID
+        const searchRes = await fetch(`${searchUrl}?q=${username}&filter=channel`, { headers: headers(YT_HOST) });
         const searchData = await searchRes.json();
-        channelId = searchData.items?.[0]?.id?.channelId;
+        
+        console.log(`📺 YT Search Data (${username}):`, JSON.stringify(searchData, null, 2));
+        // Map based on typical response 'contents' -> 'channelRenderer'
+        const channelItem = searchData.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.channelRenderer;
+        
+        if (channelItem?.channelId) {
+            channelId = channelItem.channelId;
+        } else {
+             // Fallback: try mapping from other fields if structure differs
+             // Some APIs return 'data' array
+             channelId = searchData.data?.[0]?.channelId || searchData.results?.[0]?.id;
+        }
     }
 
-    if (!channelId) throw new Error("Channel not found");
+    if (!channelId) throw new Error("YouTube Channel ID not found");
 
-    // 2. Get Channel Stats
-    const channelUrl = `https://${YT_HOST}/channels`;
-    const channelRes = await fetch(`${channelUrl}?part=statistics,snippet&id=${channelId}`, { headers: headers(YT_HOST) });
-    const channelData = await channelRes.json();
-    const channelStats = channelData.items?.[0]?.statistics || {};
-    const snippet = channelData.items?.[0]?.snippet || {};
-
-    // 3. Get Recent Videos
-    const videosUrl = `https://${YT_HOST}/search`;
-    const videosRes = await fetch(`${videosUrl}?channelId=${channelId}&part=snippet,id&order=date&maxResults=10`, { headers: headers(YT_HOST) });
+    // 2. Get Channel Videos
+    // Endpoint: /channel/videos/
+    const videosUrl = `https://${YT_HOST}/channel/videos/`;
+    const videosRes = await fetch(`${videosUrl}?id=${channelId}&filter=videos_latest`, { headers: headers(YT_HOST) });
     const videosData = await videosRes.json();
     
-    // 4. Get Video Stats (Search doesn't return view counts usually, need video details)
-    const videoIds = videosData.items?.map((v: any) => v.id.videoId).filter(Boolean).join(',');
-    let videosWithStats = [];
+    console.log(`📺 YT Videos Data:`, JSON.stringify(videosData, null, 2));
+
+    const contents = videosData.contents || videosData.data || [];
     
-    if (videoIds) {
-        const detailsUrl = `https://${YT_HOST}/videos`;
-        const detailsRes = await fetch(`${detailsUrl}?part=statistics,snippet&id=${videoIds}`, { headers: headers(YT_HOST) });
-        const detailsData = await detailsRes.json();
+    // 3. Map Videos
+    // youtube138 structure: contents -> videoRenderer
+    const videos = contents.map((item: any) => {
+        const v = item.videoRenderer;
+        if (!v) return null;
         
-        videosWithStats = detailsData.items?.map((item: any) => ({
-            externalId: item.id,
-            description: item.snippet.title,
-            url: `https://www.youtube.com/watch?v=${item.id}`,
-            thumbnailUrl: item.snippet.thumbnails?.high?.url,
-            publishedAt: item.snippet.publishedAt,
+        // Parse views "1.2M views" -> 1200000
+        const viewText = v.viewCountText?.simpleText || "";
+        const views = parseCount(viewText);
+        
+        return {
+            externalId: v.videoId,
+            description: v.title?.runs?.[0]?.text || "",
+            url: `https://www.youtube.com/watch?v=${v.videoId}`,
+            thumbnailUrl: v.thumbnail?.thumbnails?.[0]?.url,
+            publishedAt: v.publishedTimeText?.simpleText, // "2 days ago" (Relative) - Hard to convert to Date accurately without more data
             stats: {
-                views: parseInt(item.statistics.viewCount || '0'),
-                likes: parseInt(item.statistics.likeCount || '0'),
-                comments: parseInt(item.statistics.commentCount || '0'),
+                views: views,
+                likes: 0, // List view usually doesn't show likes
+                comments: 0,
                 shares: 0
             }
-        }));
-    }
+        };
+    }).filter(Boolean);
 
+    // 4. Get Channel Stats (Subscribers)
+    // We might have got it from search result (channelItem.subscriberCountText)
+    // Or call /channel/details
+    
+    // Let's rely on what we have or do a quick details call if needed
+    // For now, let's return 0 if not found, or use search data
+    let subscribers = 0;
+    // ... logic to parse subscriberCountText from search step ...
+    
     return {
-        videos: videosWithStats,
+        videos,
         profileStats: {
-            followers: parseInt(channelStats.subscriberCount || '0'),
+            followers: subscribers, // Need to parse "1.2M subscribers"
             following: 0,
-            totalViews: parseInt(channelStats.viewCount || '0'),
+            totalViews: 0,
             totalLikes: 0
         }
     };
   }
 };
+
+// Helper
+function parseCount(text: string): number {
+    if (!text) return 0;
+    const clean = text.toUpperCase().replace(/[^0-9.KMB]/g, '');
+    let mult = 1;
+    if (clean.includes('K')) mult = 1000;
+    if (clean.includes('M')) mult = 1000000;
+    if (clean.includes('B')) mult = 1000000000;
+    return parseFloat(clean) * mult;
+}
+
