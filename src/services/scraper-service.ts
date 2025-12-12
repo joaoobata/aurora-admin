@@ -182,17 +182,22 @@ export const ScraperService = {
           return ScraperService.getMockData(username);
       }
 
+      // Log structure for debugging view count mapping issues
+      console.log("🔍 First Item Structure (YouTube):", JSON.stringify(items[0], null, 2));
+
       // Map YouTube Data
       const videos = items.map((item: any) => ({
           externalId: item.id,
           description: item.title,
           url: item.url,
           thumbnailUrl: item.thumbnailUrl,
-          publishedAt: item.date, // Format might need adjustment depending on actor output
+          publishedAt: item.date, 
           stats: {
-            views: item.viewCount,
-            likes: item.likes || 0, // YouTube scraper sometimes hides likes
-            comments: item.commentsCount || 0,
+            // YouTube scraper output mapping fix
+            // Often returns 'viewCount' or 'views' or inside 'statistics' object
+            views: item.viewCount || item.views || 0,
+            likes: item.likes || item.likeCount || 0,
+            comments: item.commentsCount || item.numberOfComments || 0,
             shares: 0,
           }
       }));
