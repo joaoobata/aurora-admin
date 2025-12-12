@@ -19,12 +19,36 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Call Scraper (Real or Mock)
-    let scrapedVideos = [];
+    let scrapResult;
     if (platform === 'tiktok') {
-        scrapedVideos = await ScraperService.scrapeTikTok(username);
+        scrapResult = await ScraperService.scrapeTikTok(username);
+    } else if (platform === 'instagram') {
+        scrapResult = await ScraperService.scrapeInstagram(username);
     } else {
         // Fallback for other platforms or mock
-        scrapedVideos = ScraperService.getMockData(username);
+        scrapResult = ScraperService.getMockData(username);
+    }
+
+    // Handle legacy return format (array of videos) vs new format ({ videos, profileStats })
+    // The TikTok scraper was returning array, now it returns object.
+    // We updated scraper service to return object for both.
+    
+    // Safety check if scrapedData is array (legacy mock maybe?)
+    const scrapedVideos = Array.isArray(scrapResult) ? scrapResult : scrapResult.videos;
+    const profileStats = !Array.isArray(scrapResult) ? scrapResult.profileStats : null;
+
+    // 2.5 Update Account Profile Stats (Followers, etc)
+    if (profileStats) {
+         await supabase.from('metrics').insert({
+             account_id: accountId,
+             followers: profileStats.followers || 0,
+             views: 0, // Profile level views not always applicable or sum of videos
+             likes: 0, 
+             recorded_at: new Date().toISOString()
+         });
+         
+         // Also update 'metrics' table is sort of legacy for history. 
+         // Ideally we update account metadata too if we had columns for it.
     }
 
     // 3. Update Database
